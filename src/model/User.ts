@@ -1,19 +1,19 @@
 export class user_registration {
   constructor(
-    name: string,
+    user_name: string,
     first_name: string,
     last_name: string,
     category_id: number,
     email: string,
     password: string) {
-    this.name = name;
+    this.user_name = user_name;
     this.first_name = first_name;
     this.last_name = last_name;
     this.category_id = category_id;
     this.email = email;
     this.password = password;
     }
-  name: string;
+  user_name: string;
   first_name: string;
   last_name: string;
   category_id: number;
