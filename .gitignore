@@ -4,3 +4,4 @@ node_modules/
 
 src/components/createQuery.ts
 
+src/db/client.ts
