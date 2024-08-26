@@ -19,7 +19,13 @@ router.get("/", (req, res) => {
 router.post("/register", async(req, res) => {
   console.log("Registering user");
   console.log(req.body);
-  const { user_name, first_name, last_name, category_id, institution, email, password } = req.body;
+  const { name, first_name, last_name, category_id, institution, email, password } = req.body;
+
+  //category_idが大学研究所(2)の場合、emailの下5桁がac.jpであるか確認
+  if(category_id === 2 && email.slice(-5) !== "ac.jp") {
+    res.status(400).send("無効なメールアドレスです");
+    return;
+  }
 
   let client;
   try {
@@ -28,7 +34,7 @@ router.post("/register", async(req, res) => {
 
     //ユーザー情報を作成
     const user: user_registration = {
-      user_name: user_name,
+      user_name: name,
       first_name: first_name,
       last_name: last_name,
       category_id: category_id,
