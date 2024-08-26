@@ -5,6 +5,7 @@ import client from "../db/client";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import { v4 as uuidv4 } from "uuid";
 import { compare } from "bcrypt";
+import pool from "../db/client";
 
 
 const router = express.Router();
@@ -14,14 +15,15 @@ router.get("/", (req, res) => {
 });
 
 //ユーザー登録
-router.post("/", async(req, res) => {
+router.post("/register", async(req, res) => {
   console.log("Registering user");
   console.log(req.body);
-  const { user_name, first_name, last_name, category_id, email, password } = req.body;
+  const { user_name, first_name, last_name, category_id, institution, email, password } = req.body;
 
+  let client;
   try {
     //パスワードをハッシュ化
-    const hasyPassword = await hashPassword(password);
+    const hashedPassword = await hashPassword(password);
 
     //ユーザー情報を作成
     const user: user_registration = {
@@ -29,8 +31,9 @@ router.post("/", async(req, res) => {
       first_name: first_name,
       last_name: last_name,
       category_id: category_id,
+      institution: institution,
       email: email,
-      password: hasyPassword
+      password: hashedPassword
     }
 
     //ユーザー情報を登録するクエリを作成
@@ -39,20 +42,36 @@ router.post("/", async(req, res) => {
     console.log(query);
 
     //データベースに接続
-    await client.connect();
+    client = await pool.connect();
     console.log("connected")
 
     //ユーザー情報をデータベースに登録
     const result = await client.query(query);
     console.log(result.rows[0])
+
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("User registered");
   } catch (error) {
-    console.log(error);
-    res.send("Error registering user");
+    console.log(error instanceof Error);
+    if (error instanceof Error) {
+      console.log(error.message);
+      if(error.message.includes("unique_user_name")) {
+        res.status(400).send("User name already exists");
+        return;
+      } else if(error.message.includes("unique_email")) {
+        res.status(400).send("Email already exists");
+        return;
+      }
+    
+    }
+    //ステータスコード400とエラーメッセージを返す
+    res.status(400).send("Error registering user");
   } finally {
     //データベースとの接続を切断
-    await client.end();
-    console.log("disconnected")
-    res.send("User registered");
+    if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
   }
 
 
