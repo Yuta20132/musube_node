@@ -6,6 +6,7 @@ import { comparePassword, hashPassword } from "../components/hashUtils";
 import { v4 as uuidv4 } from "uuid";
 import { compare } from "bcrypt";
 import pool from "../db/client";
+import sendMail from "../components/sendMail";
 
 
 const router = express.Router();
@@ -48,6 +49,9 @@ router.post("/register", async(req, res) => {
     //ユーザー情報をデータベースに登録
     const result = await client.query(query);
     console.log(result.rows[0])
+
+    //メールを送信
+    sendMail(email);
 
     //ステータスコード200とメッセージを返す
     res.status(200).send("User registered");
