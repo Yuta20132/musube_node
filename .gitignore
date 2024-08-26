@@ -2,7 +2,6 @@ node_modules/
 
 .env
 
-src/components/createQuery.ts
-src/components/hashUtils.ts
+/src/components/
 
 src/db/client.ts
