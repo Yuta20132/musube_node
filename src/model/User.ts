@@ -4,12 +4,14 @@ export class user_registration {
     first_name: string,
     last_name: string,
     category_id: number,
+    institution: string,
     email: string,
     password: string) {
     this.user_name = user_name;
     this.first_name = first_name;
     this.last_name = last_name;
-    this.category_id = category_id;
+    this.category_id = category_id; 
+    this.institution = institution;
     this.email = email;
     this.password = password;
     }
@@ -17,6 +19,7 @@ export class user_registration {
   first_name: string;
   last_name: string;
   category_id: number;
+  institution: string;
   email: string;
   password: string;
 }
@@ -28,11 +31,12 @@ export class User extends user_registration {
     last_name: string,
     email: string,
     category_id: number,
+    institution: string,
     is_active: boolean, 
     is_admin: boolean,
     password: string,
     created_at: Date) {
-    super(name, first_name, last_name, category_id, email, password);
+    super(name, first_name, last_name, category_id,institution, email, password);
     this.id = id;
     this.is_active = is_active;
     this.is_admin = is_admin;
