@@ -54,10 +54,10 @@ router.post("/register", async(req, res) => {
 
     //ユーザー情報をデータベースに登録
     const result = await client.query(query);
-    console.log(result.rows[0])
+    console.log(result.rows[0].id)
 
     //メールを送信
-    sendMail(email);
+    sendMail(email, result.rows[0].id);
 
     //ステータスコード200とメッセージを返す
     res.status(200).send("User registered");
