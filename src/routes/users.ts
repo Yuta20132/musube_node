@@ -1,12 +1,13 @@
 import express from "express";
 import { user_registration } from "../model/User";
-import { createLoginInfoQuery, createLoginQuery, createRegistrationQuery } from "../components/createQuery";
+import { createActivateQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery } from "../components/createQuery";
 import client from "../db/client";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import { v4 as uuidv4 } from "uuid";
 import { compare } from "bcrypt";
 import pool from "../db/client";
 import sendMail from "../components/sendMail";
+import { create } from "domain";
 
 
 const router = express.Router();
@@ -85,6 +86,45 @@ router.post("/register", async(req, res) => {
   }
 
 
+});
+
+//http://localhost:3000/users/validate/?id=xxxx
+router.post("/validate", async(req, res) => {
+  console.log("Validating user");
+  if(!req.query.id) {
+    res.status(400).send("ID not found");
+    return;
+  } else if(typeof req.query.id !== "string") {
+    res.status(400).send("Invalid ID");
+    return;
+  }
+  const id = req.query.id;
+  console.log(id);
+  let client;
+  try {
+    //データベースに接続
+    client = await pool.connect();
+    console.log("connected");
+
+    //ユーザー情報を更新
+    const query = createActivateQuery(id);
+    console.log(query);
+
+    const result = await client.query(query);
+
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("ユーザ認証が完了しました");
+  } catch (error) {
+    console.log(error);
+    //ステータスコード400とエラーメッセージを返す
+    res.status(400).send("ユーザ認証に失敗しました");
+  } finally {
+    //データベースとの接続を切断
+    if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
 });
 
 router.post("/login", async(req, res) => {
