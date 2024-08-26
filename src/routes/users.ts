@@ -66,10 +66,10 @@ router.post("/register", async(req, res) => {
     if (error instanceof Error) {
       console.log(error.message);
       if(error.message.includes("unique_user_name")) {
-        res.status(400).send("User name already exists");
+        res.status(400).send("ユーザ名が登録されています");
         return;
       } else if(error.message.includes("unique_email")) {
-        res.status(400).send("Email already exists");
+        res.status(400).send("すでに登録されたメールアドレスです");
         return;
       }
     
@@ -101,10 +101,10 @@ router.post("/login", async(req, res) => {
     console.log("connected")
     const result = await client.query(query);
     console.log(await comparePassword(password, result.rows[0].password));
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0) {//ユーザが見つからなかった場合
       res.send("User not found");
       return;
-    } else if(await comparePassword(password, result.rows[0].password)) {
+    } else if(await comparePassword(password, result.rows[0].password)) { //パスワードが一致した場合
       console.log("ユーザーが見つかりました");
       //UUIDの生成
       const id = uuidv4();
