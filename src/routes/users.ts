@@ -88,7 +88,7 @@ router.post("/register", async(req, res) => {
 
 });
 
-//http://localhost:3000/users/validate/?id=xxxx
+//http://localhost:8080/users/validate/?id=xxxx
 router.post("/validate", async(req, res) => {
   console.log("Validating user");
   if(!req.query.id) {
