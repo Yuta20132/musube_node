@@ -142,7 +142,7 @@ router.post("/login", async(req, res) => {
     const result = await client.query(query);
     console.log(await comparePassword(password, result.rows[0].password));
     if (result.rows.length === 0) {//ユーザが見つからなかった場合
-      res.send("User not found");
+      res.send("認証済みのユーザが見つかりませんでした");
       return;
     } else if(await comparePassword(password, result.rows[0].password)) { //パスワードが一致した場合
       console.log("ユーザーが見つかりました");
