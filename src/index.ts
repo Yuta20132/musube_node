@@ -2,11 +2,15 @@ import express from 'express';
 import http from 'http';
 import { getCurrentTime } from './services/timeService';
 import userRoute from './routes/users';
+import cors from 'cors';
 
 const app = express();
 const server = http.createServer(app);
 
 const WS_PORT = 8080;
+
+// CORSを許可する
+app.use(cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
