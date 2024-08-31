@@ -9,9 +9,14 @@ const server = http.createServer(app);
 
 const WS_PORT = 8080;
 
-// CORSを許可する
-app.use(cors());
+// カスタムCORS設定
+const corsOptions = {
+  origin: '*', // 許可するオリジン
+  methods: 'GET,POST', // 許可するHTTPメソッド
+  allowedHeaders: 'Content-Type,Authorization' // 許可するヘッダー
+};
 
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
