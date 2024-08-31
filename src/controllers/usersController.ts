@@ -101,7 +101,7 @@ export const UserLoginController = async (email: string, password: string): Prom
     console.log(await comparePassword(password, result.rows[0].password));
 
     if (result.rows.length === 0) {//ユーザが見つからなかった場合
-      throw new Error("User not found");
+      throw new Error("emailが登録されていないか、認証が完了していません");
     } else if(await comparePassword(password, result.rows[0].password)) { //パスワードが一致した場合
       console.log("ユーザーが見つかりました");
 
