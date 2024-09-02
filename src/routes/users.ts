@@ -1,5 +1,5 @@
 import express from "express";
-import { user_registration } from "../model/User";
+import { user_login, user_registration } from "../model/User";
 import { createActivateQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery } from "../components/createQuery";
 import client from "../db/client";
 import { comparePassword, hashPassword } from "../components/hashUtils";
@@ -9,6 +9,7 @@ import pool from "../db/client";
 import sendMail from "../components/sendMail";
 import { create } from "domain";
 import { UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
+import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 
 
 const router = express.Router();
@@ -119,16 +120,17 @@ router.post("/login", async(req, res) => {
       return;
     }
 
-    const id = await UserLoginController(email, password);
+    //ユーザー情報を取得
+    const user: user_login = await UserLoginController(email, password);
     
-    //UUIDが生成されているか確認
-    if(!id) {
-      res.status(400).send("UUIDが生成されていません");
-      return;
-    }
+    //JWTトークンを生成
+    const token = generateJWT({
+      user_id: user.user_id,
+      category_id: user.category_id,
+    });
 
-    //先ほど生成して、データベースに追加したUUIDをクッキーにセット
-    res.cookie("session_id", id, {
+    //クッキーにトークンをセット
+    res.cookie("bulletin_token", token, {
       httpOnly: true, //クライアント側のJavaScriptからはアクセスできない
       secure: true, //HTTPS通信の場合のみ送信
       sameSite: 'strict', //クロスサイトリクエストの場合には送信しない
@@ -144,6 +146,33 @@ router.post("/login", async(req, res) => {
   } 
 
 })
+
+//JWTトークンの確認用の一時的なエンドポイント
+router.get("/check", async(req, res) => {
+  //クッキーからトークンを取得
+  const token = req.cookies.bulletin_token;
+  //トークンがない場合はエラーを返す
+  if (!token) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンを検証
+  try {
+    if(!verifyJWT(token)) {
+      res.status(400).send("トークンが無効です");
+      return;
+    } else {
+      const payload = getPayloadFromJWT(token);
+      res.status(200).send(payload);
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      console.log(error.message)
+    }
+  }
+
+});
 
 
 export default router;
