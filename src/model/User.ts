@@ -24,6 +24,15 @@ export class user_registration {
   password: string;
 }
 
+export class user_login {
+  constructor(user_id: string, category_id: string) {
+    this.user_id = user_id;
+    this.category_id = category_id;
+  }
+  user_id: string;
+  category_id: string;
+}
+
 export class User extends user_registration {
   constructor(id: number, 
     name: string, 
