@@ -4,6 +4,7 @@ import { getCurrentTime } from './services/timeService';
 import userRoute from './routes/users';
 import threadRoute from './routes/threads';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +21,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+//クッキーを使うための設定
+app.use(cookieParser());
 
 app.get('/', (req, res) => {
   res.send('Hello World!\n');
