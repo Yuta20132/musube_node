@@ -80,6 +80,7 @@ router.post("/register", async(req, res) => {
 });
 
 //http://localhost:8080/users/validate/?id=xxxx
+//メール認証
 router.post("/validate", async(req, res) => {
   console.log("Validating user");
   if(!req.query.id) {
@@ -109,6 +110,7 @@ router.post("/validate", async(req, res) => {
   }
 });
 
+//ログイン
 router.post("/login", async(req, res) => {
   console.log("Logging in user");
   try {
@@ -154,7 +156,34 @@ router.post("/login", async(req, res) => {
 })
 
 //JWTトークンの確認用の一時的なエンドポイント
-router.get("/check", async(req, res) => {
+// router.get("/check", async(req, res) => {
+//   //クッキーからトークンを取得
+//   const token = req.cookies.bulletin_token;
+//   //トークンがない場合はエラーを返す
+//   if (!token) {
+//     res.status(400).send("トークンがありません");
+//     return;
+//   }
+
+//   //トークンを検証
+//   try {
+//     if(!verifyJWT(token)) {
+//       res.status(400).send("トークンが無効です");
+//       return;
+//     } else {
+//       const payload = getPayloadFromJWT(token);
+//       res.status(200).send(payload);
+//     }
+//   } catch (error) {
+//     if (error instanceof Error) {
+//       console.log(error.message)
+//     }
+//   }
+
+// });
+
+//ログアウト
+router.post("/logout", async(req, res) => {
   //クッキーからトークンを取得
   const token = req.cookies.bulletin_token;
   //トークンがない場合はエラーを返す
@@ -163,20 +192,9 @@ router.get("/check", async(req, res) => {
     return;
   }
 
-  //トークンを検証
-  try {
-    if(!verifyJWT(token)) {
-      res.status(400).send("トークンが無効です");
-      return;
-    } else {
-      const payload = getPayloadFromJWT(token);
-      res.status(200).send(payload);
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      console.log(error.message)
-    }
-  }
+  //トークンを削除
+  res.clearCookie("bulletin_token");
+  res.status(200).send("ログアウトしました");
 
 });
 
