@@ -1,6 +1,8 @@
-import { createGetCategoryQuery, createThreadQuery } from "../components/createQuery";
+import { get } from "http";
+import { createGetCategoryQuery, createGetThreadsQuery, createThreadQuery } from "../components/createQuery";
 import pool from "../db/client";
-import { thread_registration } from "../model/Threads";
+import { Thread, thread_registration } from "../model/Threads";
+import { user_login } from "../model/User";
 
 
 
@@ -55,4 +57,33 @@ export const ThreadRegistrationController = async(session_id: string, thread: th
 
   }
   return is_success;
+}
+
+//user_loginを受け取ってThreadを返す
+export const ThreadGetController = async(category_id:string):Promise<Thread[]> => {
+
+  let client;
+  try {
+    //データベースに接続
+    client = await pool.connect();
+    console.log("connected");
+
+    const query:string = createGetThreadsQuery(category_id);
+
+    console.log("スレッドを取得するクエリ\n");
+    console.log(query);
+
+    const result = await client.query(query);
+    console.log("スレッドを取得");
+    console.log(result.rows);
+
+    const threads:Thread[] = result.rows;
+    return threads;
+  } catch(error) {
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("なんらかのエラーが発生しました" + error);
+    }
+  }
 }
