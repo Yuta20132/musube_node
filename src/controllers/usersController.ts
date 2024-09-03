@@ -2,7 +2,7 @@ import { createActivateQuery, createLoginInfoQuery, createLoginQuery, createRegi
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import sendMail from "../components/sendMail";
 import pool from "../db/client";
-import { user_registration } from "../model/User";
+import { user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
 
 
@@ -85,10 +85,11 @@ export const UserValidationController = async (id: string): Promise<boolean> => 
   }
 }
 
-export const UserLoginController = async (email: string, password: string): Promise<string> => {
+export const UserLoginController = async (email: string, password: string): Promise<user_login> => {
   //パスワードをハッシュ化
   const p = await hashPassword(password);
 
+  //emailからpasswordとis_activeを取得するクエリを作成
   const query = createLoginQuery(email);
 
   let client;
@@ -99,21 +100,18 @@ export const UserLoginController = async (email: string, password: string): Prom
     console.log("connected");
     const result = await client.query(query);
     console.log(await comparePassword(password, result.rows[0].password));
+    console.log(result.rows[0].is_active);
 
     if (result.rows.length === 0) {//ユーザが見つからなかった場合
-      throw new Error("emailが登録されていないか、認証が完了していません");
+      throw new Error("emailが登録されていません");
+    } else if (!result.rows[0].is_active) {//ユーザが認証されていない場合
+      throw new Error("ユーザが認証されていません");
     } else if(await comparePassword(password, result.rows[0].password)) { //パスワードが一致した場合
-      console.log("ユーザーが見つかりました");
+      //result.rowsの中身の型を確認
+      console.log(result.rows[0]);
 
-      //UUIDの生成
-      const id = uuidv4();
-      //古いログイン情報を削除し、新しいログイン情報を追加
-      const query = createLoginInfoQuery(id, email);
-
-      const result = await client.query(query);
-      console.log(result);
-
-      return id;
+      const user = new user_login(result.rows[0].id, result.rows[0].category_id);
+      return user;
     } else {
       throw new Error("パスワードが一致しません");
     }
