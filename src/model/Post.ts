@@ -20,3 +20,10 @@ export class Post {
   created_at: Date;
 
 }
+
+export interface post_registration {
+  thread_id: number;
+  user_id: number;
+  content: string;
+  title: string;
+}
