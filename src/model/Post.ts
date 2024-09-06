@@ -23,7 +23,7 @@ export class Post {
 
 export interface post_registration {
   thread_id: number;
-  user_id: number;
+  user_id: string;
   content: string;
   title: string;
 }
