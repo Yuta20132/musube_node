@@ -3,6 +3,7 @@ import http from 'http';
 import { getCurrentTime } from './services/timeService';
 import userRoute from './routes/users';
 import threadRoute from './routes/threads';
+import postRoute from './routes/posts';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -30,6 +31,7 @@ app.get('/', (req, res) => {
 
 app.use("/users", userRoute);
 app.use("/threads", threadRoute);
+app.use("/posts", postRoute);
 
 server.listen(WS_PORT, () => {
   console.log(`Server started on http://localhost:${WS_PORT}`);

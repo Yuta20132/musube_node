@@ -85,5 +85,11 @@ export const ThreadGetController = async(category_id:string):Promise<Thread[]> =
     } else {
       throw new Error("なんらかのエラーが発生しました" + error);
     }
+  } finally {
+    //データベースとの接続を切断
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
   }
 }
