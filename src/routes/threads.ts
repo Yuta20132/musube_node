@@ -53,8 +53,8 @@ router.get("/:category_id", async(req, res) => {
       category_id: payload.category_id
     }
 
-    //カテゴリIDが一致せず、かつカテゴリIDが5（管理者）でない場合はエラーを返す
-    if(req_category_id !== user.category_id  && user.category_id !== "5") {
+    //カテゴリIDが一致せず、かつカテゴリIDが5（管理者）でない場合、またはカテゴリIDが1（全体）でない場合はエラーを返す
+    if(req_category_id !== user.category_id  && user.category_id !== "5" && req_category_id !== "1") {
       res.status(400).send("権限がありません");
       return;
     }
