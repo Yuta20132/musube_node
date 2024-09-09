@@ -1,7 +1,7 @@
 import e from "express";
 import express from "express";
 import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
-import { PostCreateController } from "../controllers/postController";
+import { PostCreateController, PostDeleteController } from "../controllers/postController";
 import { post_registration } from "../model/Post";
 
 const router = express.Router();
@@ -99,5 +99,59 @@ router.post("/", async (req, res) => {
     }
   }
 });
+
+router.delete("/", async (req, res) => {
+  const { post_id, user_id } = req.body;
+  if (post_id === undefined || user_id === undefined) {
+    res.status(400).send("post_idまたはuser_idが入力されていません");
+    return;
+  }
+
+  //ポストIDを数値に変換できない場合はエラーを返す
+  if (isNaN(Number(post_id))) {
+    res.status(400).send("post_idが数値ではありません");
+    return;
+  }
+
+  
+  const token = req.cookies.bulletin_token;
+  if (token === undefined || token === null) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+  const payload_user_id = payload.user_id;
+
+  //一応ここでエラー起きるようにしてるけど、フロント側で自分の投稿じゃないものを消せないようにしてるから起きないと思う
+  if (payload_user_id !== user_id) {
+    res.status(400).send("権限がありません");
+    return;
+  }
+
+  try {
+    await PostDeleteController(Number(post_id));
+    res.status(200).send("投稿を削除しました");
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send("何らかのエラーが発生: " + error);
+    }
+  }
+
+  
+})
 
 export default router;
