@@ -53,7 +53,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-//GET /api/users/search?username=johndoe
+//GET /users/search?username=johndoe
 router.get("/search", async(req, res) => {
   console.log("ユーザ検索");
 
