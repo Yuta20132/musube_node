@@ -1,4 +1,5 @@
-import { createActivateQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery } from "../components/createQuery";
+import { create } from "domain";
+import { createActivateQuery, createGetAllUsersQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import sendMail from "../components/sendMail";
 import pool from "../db/client";
@@ -130,6 +131,33 @@ export const UserLoginController = async (email: string, password: string): Prom
   } finally {
     //データベースとの接続を切断
     if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+export const AllUsersGetController = async () => {
+  let client;
+  try {
+    client = await pool.connect();
+    console.log("connected");
+
+    const query = createGetAllUsersQuery();
+    const result = await client.query(query);
+    console.log("全ユーザ取得結果")
+    console.dir(result, { depth: null });
+    // `rows` と `rowCount` のみ抽出
+    const simplifiedResult = {
+      rowCount: result.rowCount,
+      rows: result.rows
+    };
+    return simplifiedResult;
+  } catch (error) {
+    console.log(error);
+    throw new Error("Error getting all users");
+  } finally {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");

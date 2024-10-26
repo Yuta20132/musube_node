@@ -8,14 +8,49 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import sendMail from "../components/sendMail";
 import { create } from "domain";
-import { UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 
 
 const router = express.Router();
 
-router.get("/", (req, res) => {
-  res.send("All users");
+router.get("/", async (req, res) => {
+  console.log("全ユーザの取得");
+
+  //トークンがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+
+  //payloadにあるユーザのcategory_idが5（管理者）でない場合はエラーを返す
+  if (payload.category_id !== "5") {
+    res.status(400).send("権限がありません");
+    return;
+  }
+
+  try {
+    const users = await AllUsersGetController();
+    res.status(200).send(users);
+  } catch (err) {
+    console.log(err);
+    res.status(400).send("ユーザの取得に失敗しました");
+  }
 });
 
 //ユーザー登録
