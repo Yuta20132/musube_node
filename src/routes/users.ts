@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import sendMail from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 
 
@@ -52,6 +52,49 @@ router.get("/", async (req, res) => {
     res.status(400).send("ユーザの取得に失敗しました");
   }
 });
+
+//GET /api/users/search?username=johndoe
+router.get("/search", async(req, res) => {
+  console.log("ユーザ検索");
+
+  //トークンがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  //usernameがない場合はエラーを返す
+  if(!req.query.username) {
+    res.status(400).send("usernameがありません");
+    return;
+  }
+
+  // クエリパラメータから `username` を取得後、文字列に変換
+  const username = String(req.query.username);
+
+  try {
+    const users = await SearchUsersController(username);
+
+    res.status(200).send(users);
+  } catch (err) {
+    console.log(err);
+    res.status(400).send("ユーザの取得に失敗しました");
+  }
+})
 
 //ユーザー登録
 router.post("/register", async(req, res) => {

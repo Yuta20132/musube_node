@@ -1,5 +1,5 @@
 import { create } from "domain";
-import { createActivateQuery, createGetAllUsersQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery } from "../components/createQuery";
+import { createActivateQuery, createGetAllUsersQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import sendMail from "../components/sendMail";
 import pool from "../db/client";
@@ -161,5 +161,28 @@ export const AllUsersGetController = async () => {
       client.release();
     }
     console.log("disconnected\n");
+  }
+}
+
+export const SearchUsersController = async (username: string) => {
+  let client;
+
+  try {
+    client = await pool.connect();
+    console.log("connected");
+
+    const query = createSearchUserQuery();
+    const result = await client.query(query, [username]);
+    console.log("検索結果");
+    console.dir(result, { depth: null });
+
+    const simplifiedResult = {
+      rowCount: result.rowCount,
+      rows: result.rows
+    };
+    return simplifiedResult;
+  } catch (err) {
+    console.log(err);
+    throw new Error("Error searching users");
   }
 }
