@@ -64,3 +64,28 @@ export const PostCreateController = async (post: post_registration, category_id:
     console.log("disconnected\n");
   }
 };
+
+export const PostDeleteController = async (post_id: number) => {
+  let client;
+
+  try {
+    client = await pool.connect();
+    const query = "DELETE FROM posts WHERE id = $1";
+    const result = await client.query(query, [post_id]);
+
+    console.log(result.rowCount);
+    if (result.rowCount === 0) {
+      throw new Error("指定された投稿が存在しません");
+    } else {
+      console.log(result.rowCount);
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      console.log(error.message);
+      throw new Error(error.message);
+    } else {
+      console.log("予期しないエラー", error);
+      throw new Error("何らかのエラーが発生");
+    }
+  }
+}
