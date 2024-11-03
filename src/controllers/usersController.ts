@@ -1,10 +1,11 @@
 import { create } from "domain";
-import { createActivateQuery, createGetAllUsersQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
+import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import sendMail from "../components/sendMail";
 import pool from "../db/client";
 import { user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
+import { get } from "http";
 
 
 export const UserRegistrationController = async (user: user_registration): Promise<boolean> => {
@@ -18,16 +19,16 @@ export const UserRegistrationController = async (user: user_registration): Promi
   let client;
   try {
     //データベースに接続
-  client = await pool.connect();
-  console.log("connected");
+    client = await pool.connect();
+    console.log("connected");
 
-  //ユーザー情報をデータベースに登録
-  const result = await client.query(query);
-  console.log(result);
-  console.log("id:" + result.rows[0].id)
+    //ユーザー情報をデータベースに登録
+    const result = await client.query(query);
+    console.log(result);
+    console.log("id:" + result.rows[0].id)
 
-  //result.rows[0].idがあればメールを送信
-  // sendMail(email, result.rows[0].id);
+    //result.rows[0].idがあればメールを送信
+    // sendMail(email, result.rows[0].id);
   if (result.rows[0].id != undefined) {
     await sendMail(user.email, result.rows[0].id);
   } else {
@@ -164,7 +165,7 @@ export const AllUsersGetController = async () => {
   }
 }
 
-export const SearchUsersController = async (username: string) => {
+export const SearchUsersController = async (username: string,) => {
   let client;
 
   try {
@@ -181,6 +182,30 @@ export const SearchUsersController = async (username: string) => {
       rows: result.rows
     };
     return simplifiedResult;
+  } catch (err) {
+    console.log(err);
+    throw new Error("Error searching users");
+  }
+}
+
+export const SearchOwnInfoController = async (user_id: string) => {
+  let client;
+
+  try {
+    client = await pool.connect();
+    console.log("connected");
+
+    const query = createGetMyInfoQuery();
+    const result = await client.query(query, [user_id]);
+    console.log("検索結果");
+    //console.dir(result, { depth: null });
+
+    // rowsが空の場合はエラーを返す
+    if (result.rows.length === 0) {
+      throw new Error("ユーザが見つかりませんでした");
+    } else {
+      return result.rows[0];
+    }
   } catch (err) {
     console.log(err);
     throw new Error("Error searching users");

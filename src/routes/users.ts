@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import sendMail from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, SearchOwnInfoController, SearchUsersController, UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 
 
@@ -47,6 +47,38 @@ router.get("/", async (req, res) => {
   try {
     const users = await AllUsersGetController();
     res.status(200).send(users);
+  } catch (err) {
+    console.log(err);
+    res.status(400).send("ユーザの取得に失敗しました");
+  }
+});
+
+router.get("/me", async(req, res) => {
+  console.log("自分の情報取得");
+
+  //トークンがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  try {
+    const user = await SearchOwnInfoController(payload.user_id);
+    res.status(200).send(user);
   } catch (err) {
     console.log(err);
     res.status(400).send("ユーザの取得に失敗しました");
@@ -103,7 +135,7 @@ router.post("/register", async(req, res) => {
   const { name, first_name, last_name, category_id, institution, email, password } = req.body;
 
   //category_idが5のユーザー（管理者）は、APIからの登録はできないようにする
-  if(category_id === 5) {
+  if(String(category_id) === "5") {
     res.status(400).send("管理者ユーザを登録することはできません");
     return;
   }
