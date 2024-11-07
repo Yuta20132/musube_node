@@ -58,7 +58,7 @@ export class User extends user_registration {
   created_at: Date;
 }
 
-export class send_email {
+export class mailInfo {
   constructor(id: number, email: string) {
     this.id = id;
     this.email = email;

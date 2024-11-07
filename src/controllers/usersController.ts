@@ -29,7 +29,9 @@ export const UserRegistrationController = async (user: user_registration): Promi
   //result.rows[0].idがあればメールを送信
   // sendMail(email, result.rows[0].id);
   if (result.rows[0].id != undefined) {
-    await sendMail(user.email, result.rows[0].id);
+    //send_emailクラスのインスタンスを作成
+    const email = new send_email(user.email, result.rows[0].id);
+    return s
   } else {
     throw new Error("Error sending mail");
   }
