@@ -3,7 +3,7 @@ import { createActivateQuery, createGetAllUsersQuery, createLoginInfoQuery, crea
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import sendMail from "../components/sendMail";
 import pool from "../db/client";
-import { user_login, user_registration } from "../model/User";
+import { mailInfo, user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
 
 
@@ -30,8 +30,8 @@ export const UserRegistrationController = async (user: user_registration): Promi
   // sendMail(email, result.rows[0].id);
   if (result.rows[0].id != undefined) {
     //send_emailクラスのインスタンスを作成
-    const email = new send_email(user.email, result.rows[0].id);
-    return s
+    const mI = new mailInfo(user.email, result.rows[0].id);
+    return mI;
   } else {
     throw new Error("Error sending mail");
   }

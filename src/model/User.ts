@@ -59,10 +59,10 @@ export class User extends user_registration {
 }
 
 export class mailInfo {
-  constructor(id: number, email: string) {
+  constructor(id: string, email: string) {
     this.id = id;
     this.email = email;
   }
-  id: number;
+  id: string;
   email: string;
 }
