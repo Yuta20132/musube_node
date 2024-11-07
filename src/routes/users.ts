@@ -6,7 +6,7 @@ import { comparePassword, hashPassword } from "../components/hashUtils";
 
 import { compare } from "bcrypt";
 import pool from "../db/client";
-import sendMail from "../components/sendMail";
+import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
 import { AllUsersGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
@@ -129,13 +129,17 @@ router.post("/register", async(req, res) => {
       password: hashedPassword
     }
 
-    const is_success = await UserRegistrationController(user);
+    const  mailInfo= await UserRegistrationController(user);
 
-    if (is_success) {
-      res.status(200).send("ユーザ登録が完了しました");
-    } else {
-      res.status(400).send("ユーザ登録に失敗しました");
-    }
+    //トークンの生成
+    const token = await createVerificationToken(mailInfo.id);
+
+    //メール送信
+    await sendMail(mailInfo.email, token);
+
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("仮登録完了");
+    
   } catch (error) {
     console.log(error);
     console.log(error instanceof Error);

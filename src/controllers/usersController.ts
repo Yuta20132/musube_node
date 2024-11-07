@@ -1,13 +1,12 @@
 import { create } from "domain";
 import { createActivateQuery, createGetAllUsersQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
-import sendMail from "../components/sendMail";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
 
 
-export const UserRegistrationController = async (user: user_registration): Promise<boolean> => {
+export const UserRegistrationController = async (user: user_registration): Promise<mailInfo> => {
   console.log("User Registration Controller");
   let check = false;
 
@@ -30,14 +29,11 @@ export const UserRegistrationController = async (user: user_registration): Promi
   // sendMail(email, result.rows[0].id);
   if (result.rows[0].id != undefined) {
     //send_emailクラスのインスタンスを作成
-    const mI = new mailInfo(user.email, result.rows[0].id);
+    const mI = new mailInfo(result.rows[0].id, user.email);
     return mI;
   } else {
     throw new Error("Error sending mail");
   }
-
-  check = true;
-  return check;
   
   } catch(err) {
     //console.log(err);
