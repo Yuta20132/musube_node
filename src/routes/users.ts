@@ -198,6 +198,21 @@ router.post("/register", async(req, res) => {
 
 //登録確認メールの再送信
 router.post("/register_resend", async(req, res) => {
+
+  //トークンがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+
   console.log("resend Mail when registering");
   console.log(req.body);
 
