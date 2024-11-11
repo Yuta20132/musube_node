@@ -1,5 +1,5 @@
 import { create } from "domain";
-import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
+import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
@@ -53,6 +53,49 @@ export const UserRegistrationController = async (user: user_registration): Promi
     console.log("disconnected\n");
   }
   
+}
+
+//ユーザ認証のためのメールを再送信する
+export const UserReSendMailController = async (id: string): Promise<mailInfo> => {
+  let client;
+  try {
+    //データベースに接続
+    client = await pool.connect();
+    console.log("connected");
+
+    //ユーザー情報を更新
+    const query = createGetUserByEmailQuery();
+    console.log(query);
+
+    const result = await client.query(query, [id]);
+
+    //1件なければエラーを返す
+    if (result.rows.length === 1) {
+      //
+      if (result.rows[0].is_active) {
+        throw new Error("ユーザがすでに認証されています");
+      } else {
+        const mI = new mailInfo(result.rows[0].id, result.rows[0].email);
+        return mI;
+      }
+    } else {
+      throw new Error("ユーザが存在しません");
+    }
+
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("なんらかのエラーが発生");
+    }
+  } finally {
+    //データベースとの接続を切断
+    if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
 }
 
 export const UserValidationController = async (id: string): Promise<boolean> => {

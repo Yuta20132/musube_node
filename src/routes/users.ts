@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, MyInfoGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, MyInfoGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 
 
@@ -162,7 +162,7 @@ router.post("/register", async(req, res) => {
       password: hashedPassword
     }
 
-    const  mailInfo= await UserRegistrationController(user);
+    const  mailInfo = await UserRegistrationController(user);
 
     //トークンの生成
     const token = await createVerificationToken(mailInfo.id);
@@ -186,6 +186,8 @@ router.post("/register", async(req, res) => {
         return;
       }
     
+    } else {
+      res.status(400).send(error);
     }
     //ステータスコード400とエラーメッセージを返す
     res.status(400).send("catch Error ユーザ登録に失敗しました"); 
@@ -215,34 +217,27 @@ router.post("/register_resend", async(req, res) => {
 
   try {
     //一次的なやつ
-    const query = "a";
-
-    const result = await client.query(query);
-    if (result.rows.length === 0) {
-      res.status(400).send("登録されていないメールアドレスです");
-      return;
-    }
-
-    //ユーザーIDを取得
-    const user_id = result.rows[0].id;
+    const mailInfo = await UserReSendMailController(email);
 
     //トークンの生成
-    const token = await createVerificationToken(user_id);
+    const token = await createVerificationToken(mailInfo.id);
 
     //メール送信
     await sendMail(email, token);
 
     //ステータスコード200とメッセージを返す
-    res.status(200).send("仮登録完了");
+    res.status(200).send("メールを再送信しました");
     
   } catch (error) {
     console.log(error);
     console.log(error instanceof Error);
     if (error instanceof Error) {
       console.log(error.message);
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
     }
-    //ステータスコード400とエラーメッセージを返す
-    res.status(400).send("catch Error ユーザ登録に失敗しました"); 
+    
   }
 });
 
