@@ -57,3 +57,12 @@ export class User extends user_registration {
   is_admin: boolean;
   created_at: Date;
 }
+
+export class mailInfo {
+  constructor(id: string, email: string) {
+    this.id = id;
+    this.email = email;
+  }
+  id: string;
+  email: string;
+}

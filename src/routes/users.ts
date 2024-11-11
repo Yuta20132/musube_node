@@ -6,9 +6,9 @@ import { comparePassword, hashPassword } from "../components/hashUtils";
 
 import { compare } from "bcrypt";
 import pool from "../db/client";
-import sendMail from "../components/sendMail";
+import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, MyInfoGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 
 
@@ -53,6 +53,7 @@ router.get("/", async (req, res) => {
   }
 });
 
+
 //GET /users/search?username=johndoe
 router.get("/search", async(req, res) => {
   console.log("ユーザ検索");
@@ -94,7 +95,40 @@ router.get("/search", async(req, res) => {
     console.log(err);
     res.status(400).send("ユーザの取得に失敗しました");
   }
-})
+});
+
+//GET /users/me
+router.get("/me", async(req, res) => {
+  console.log("自分のユーザ情報を取得");
+
+  //トークンがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  try {
+    const user = await MyInfoGetController(payload.user_id);
+    res.status(200).send(user);
+  } catch (err) {
+    console.log(err);
+    res.status(400).send("ユーザの取得に失敗しました");
+  }
+});
 
 //ユーザー登録
 router.post("/register", async(req, res) => {
@@ -129,13 +163,17 @@ router.post("/register", async(req, res) => {
       password: hashedPassword
     }
 
-    const is_success = await UserRegistrationController(user);
+    const  mailInfo = await UserRegistrationController(user);
 
-    if (is_success) {
-      res.status(200).send("ユーザ登録が完了しました");
-    } else {
-      res.status(400).send("ユーザ登録に失敗しました");
-    }
+    //トークンの生成
+    const token = await createVerificationToken(mailInfo.id);
+
+    //メール送信
+    await sendMail(mailInfo.email, token);
+
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("仮登録完了");
+    
   } catch (error) {
     console.log(error);
     console.log(error instanceof Error);
@@ -149,12 +187,74 @@ router.post("/register", async(req, res) => {
         return;
       }
     
+    } else {
+      res.status(400).send(error);
     }
     //ステータスコード400とエラーメッセージを返す
     res.status(400).send("catch Error ユーザ登録に失敗しました"); 
   }
 
 
+});
+
+//登録確認メールの再送信
+router.post("/register_resend", async(req, res) => {
+
+  //トークンがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+
+  console.log("resend Mail when registering");
+  console.log(req.body);
+
+  //emailがない場合はエラーを返す
+  if(!req.body.email) {
+    res.status(400).send("emailがありません");
+    return;
+  }
+
+  //emailが文字列であるか確認
+  if(typeof req.body.email !== "string") {
+    res.status(400).send("emailが文字列ではありません");
+    return;
+  }
+
+  const email = req.body.email;
+
+  try {
+    //一次的なやつ
+    const mailInfo = await UserReSendMailController(email);
+
+    //トークンの生成
+    const token = await createVerificationToken(mailInfo.id);
+
+    //メール送信
+    await sendMail(email, token);
+
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("メールを再送信しました");
+    
+  } catch (error) {
+    console.log(error);
+    console.log(error instanceof Error);
+    if (error instanceof Error) {
+      console.log(error.message);
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
+    }
+    
+  }
 });
 
 //http://localhost:8080/users/validate/?id=xxxx
