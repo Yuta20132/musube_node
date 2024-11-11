@@ -1,5 +1,5 @@
 import { create } from "domain";
-import { createActivateQuery, createGetAllUsersQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
+import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
@@ -183,4 +183,32 @@ export const SearchUsersController = async (username: string) => {
     console.log(err);
     throw new Error("Error searching users");
   }
+}
+
+//自分のユーザ情報を取得する
+export const MyInfoGetController = async (id: string) => {
+  let client;
+  try {
+    client = await pool.connect();
+    console.log("connected");
+
+    const query = createGetMyInfoQuery();
+    const result = await client.query(query, [id]);
+    if(result.rows.length === 0) {
+      throw new Error("ユーザが見つかりませんでした");
+    } else {
+      console.log(result.rows[0].user_name + "の情報");
+      console.dir(result, { depth: null });
+      return result.rows[0];
+    }
+    return result.rows[0];
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("Error getting my info");
+    }
+  }
+
 }
