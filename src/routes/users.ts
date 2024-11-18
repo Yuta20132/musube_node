@@ -196,6 +196,11 @@ router.post("/register", async(req, res) => {
 
 });
 
+//ユーザ情報の更新
+router.put("/:userId", async(req, res) => {
+  
+});
+
 //登録確認メールの再送信
 router.post("/register_resend", async(req, res) => {
 
