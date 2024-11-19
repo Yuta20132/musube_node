@@ -1,10 +1,19 @@
 import { create } from "domain";
-import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
+import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
 
+//getTokenInfoControllerで取得したcategory_idとuser_idを返却するためのクラス
+export class user_verify {
+  constructor( user_id: string, category_id: string) {
+    this.user_id = user_id;
+    this.category_id = category_id;
+  }
+  user_id: string;
+  category_id: string;
+}
 
 export const UserRegistrationController = async (user: user_registration): Promise<mailInfo> => {
   console.log("User Registration Controller");
@@ -98,7 +107,7 @@ export const UserReSendMailController = async (id: string): Promise<mailInfo> =>
   }
 }
 
-export const UserValidationController = async (id: string): Promise<boolean> => {
+export const UserValidationController = async (uv: user_verify): Promise<boolean> => {
   let check = false;
 
   let client;
@@ -107,20 +116,75 @@ export const UserValidationController = async (id: string): Promise<boolean> => 
     client = await pool.connect();
     console.log("connected");
 
-    //ユーザー情報を更新
-    const query = createActivateQuery(id);
-    console.log(query);
+    let query;
 
-    const result = await client.query(query);
+    //uv.category_idの型を調べる
+    console.log(typeof uv.category_id);
 
-    check = true;
-    return check;
+
+    if (String(uv.category_id) === "1") {
+      console.log("ユーザの有効化");
+      //ユーザ情報を更新
+      query = createActivateQuery();
+    } else if (String(uv.category_id) === "2" || String(uv.category_id) === "3") { //2または3の場合
+      //一旦ここは保留
+
+      query = "test";
+    } else {
+      throw new Error("カテゴリが不正です");
+    }
+
+
+    const result = await client.query(query, [uv.user_id]);
+    console.dir(result, { depth: null });
+
+    if(result.rowCount === 1) {
+      check = true;
+      return check;
+    } else {
+      throw new Error("ユーザの有効化に失敗しました");
+    }
   } catch (error) {
     console.log(error);
     throw new Error("Error validating user");
   } finally {
     //データベースとの接続を切断
     if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+export const getTokenInfoController = async (token: string):Promise<user_verify> => {
+  console.log("getTokenInfoController");
+  let client;
+  try {
+    client = await pool.connect();
+    console.log("connected");
+
+    const query = createGetTokenCategoryQuery();
+    const result = await client.query(query, [token]);
+    console.log("トークン情報");
+    console.dir(result, { depth: null });
+
+    if (result.rows.length === 0) {
+      throw new Error("トークンが見つかりませんでした");
+    } else {
+      if (result.rows[0].expires_at < new Date()) {
+        throw new Error("トークンの有効期限が切れています");
+      } else {
+        console.log(result.rows[0].category_id);
+        //user_verifyクラスのインスタンスを作成
+        const uv = new user_verify(result.rows[0].user_id, result.rows[0].category_id);
+        return uv;
+      }
+    }
+  } catch (error) {
+    console.log(error);
+    throw new Error("Error getting token info");
+  } finally {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");

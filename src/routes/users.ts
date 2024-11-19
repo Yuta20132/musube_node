@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, MyInfoGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, getTokenInfoController, MyInfoGetController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 
 
@@ -165,7 +165,7 @@ router.post("/register", async(req, res) => {
     const  mailInfo = await UserRegistrationController(user);
 
     //トークンの生成
-    const token = await createVerificationToken(mailInfo.id);
+    const token = await createVerificationToken(mailInfo.id, 1);
 
     //メール送信
     await sendMail(mailInfo.email, token);
@@ -197,6 +197,7 @@ router.post("/register", async(req, res) => {
 });
 
 //ユーザ情報の更新
+//未実装
 router.put("/:userId", async(req, res) => {
   
 });
@@ -240,7 +241,7 @@ router.post("/register_resend", async(req, res) => {
     const mailInfo = await UserReSendMailController(email);
 
     //トークンの生成
-    const token = await createVerificationToken(mailInfo.id);
+    const token = await createVerificationToken(mailInfo.id, 1);
 
     //メール送信
     await sendMail(email, token);
@@ -261,26 +262,50 @@ router.post("/register_resend", async(req, res) => {
   }
 });
 
-//http://localhost:8080/users/validate/?id=xxxx
+//プロフィール編集の際のメールの再送信
+//未実装
+router.post("/profile_resend", async(req, res) => {
+
+})
+
+
+//http://localhost:8080/users/verify
 //メール認証
-router.post("/validate", async(req, res) => {
-  console.log("Validating user");
-  if(!req.query.id) {
-    res.status(400).send("ID not found");
+//未実装
+router.post("/verify", async(req, res) => {
+  console.log("メール認証");
+
+  let token;
+  console.log(req.body.token);
+
+  //tokenがリクエストボディにあれば取得
+  if (!req.body.token) {
+    res.status(400).send("トークンがありません");
     return;
-  } else if(typeof req.query.id !== "string") {
-    res.status(400).send("Invalid ID");
-    return;
+  } else {
+    if (typeof req.body.token !== "string") {
+      res.status(400).send("トークンが文字列ではありません");
+      return;
+    } else {
+      token = String(req.body.token);
+    }
   }
-  const id = req.query.id;
   
   try {
-    const is_success = await UserValidationController(id);
+    //トークンを検証
+    console.log("token:" + token);
+    const uv: user_verify = await getTokenInfoController(token);
+
+    const is_success = await UserValidationController(uv);
 
     console.log(is_success);
     if(is_success) {
+      console.log("ユーザ認証完了");
       //ステータスコード200とメッセージを返す
       res.status(200).send("ユーザ認証が完了しました");
+      return;
+    } else {
+      res.status(400).send("ユーザ認証に失敗しました");
       return;
     }
 
