@@ -203,7 +203,7 @@ router.put("/:userId", async(req, res) => {
 });
 
 //登録確認メールの再送信
-router.post("/register_resend", async(req, res) => {
+router.get("/register_resend", async(req, res) => {
 
   //トークンがあるか確認
   const token = req.cookies.bulletin_token;
@@ -265,7 +265,7 @@ router.post("/register_resend", async(req, res) => {
 //プロフィール編集の際のメールの再送信
 //未実装
 router.post("/profile_resend", async(req, res) => {
-
+ 
 })
 
 
