@@ -76,7 +76,7 @@ router.get("/:category_id", async(req, res) => {
 //スレッドのタイトルと内容、カテゴリIDを受け取る
 router.post("/", async(req, res) => {
   //cookieからsession_idを取得
-  const session_id = await req.cookies.session_id;
+  const session_id = await req.cookies.bulletin_token;
   console.log(session_id);
   //なければエラーを返す
   if (session_id === undefined) {
