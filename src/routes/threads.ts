@@ -76,13 +76,32 @@ router.get("/:category_id", async(req, res) => {
 //スレッドのタイトルと内容、カテゴリIDを受け取る
 router.post("/", async(req, res) => {
   //cookieからsession_idを取得
-  const session_id = await req.cookies.bulletin_token;
-  console.log(session_id);
+  const token = await req.cookies.bulletin_token;
+  console.log("token=", token);
   //なければエラーを返す
-  if (session_id === undefined) {
-    res.status(400).send("セッションがありません");
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
     return;
   }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  //payloadにあるユーザのcategory_idと受け取った投稿のcategory_idが一致しない場合エラーを返す
+  // if (payload.category_id !== category_id) {
+  //   res.status(400).send("権限がありません");
+  //   return;
+  // }
 
   let { title, description, category_id } = req.body;
   //タイトルまたはカテゴリIDがない場合はエラーを返す
@@ -91,10 +110,19 @@ router.post("/", async(req, res) => {
     return;
   }
 
+  //payload.category_idと受け取ったカテゴリIDが一致するか、またはpayload.category_idが5（管理者）の場合のみ許可
+  if (payload.category_id !== category_id && payload.category_id !== "5") {
+    res.status(400).send("権限がありません");
+    return;
+  }
+
+
   //内容がない場合は空文字を代入
   if (description === undefined) {
     description = "";
   }
+
+  
 
   const thread: thread_registration = {
     title: title,
@@ -104,7 +132,7 @@ router.post("/", async(req, res) => {
 
   try {
     //controllerにスレッド情報とセッションIDを渡す
-    const is_success = await ThreadRegistrationController(session_id, thread);
+    const is_success = await ThreadRegistrationController(thread);
     //成功した場合はステータスコード200を返す
     if (is_success) {
       res.status(200).send("スレッドの作成に成功しました");
