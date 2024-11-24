@@ -66,3 +66,24 @@ export class mailInfo {
   id: string;
   email: string;
 }
+
+export  class profile_edit {
+  constructor(user_id: string,user_name: string,first_name: string,last_name: string,category_id: number,institution: string,email: string,password: string) {
+    this.user_id = user_id;
+    this.user_name = user_name;
+    this.first_name = first_name;
+    this.last_name = last_name;
+    this.category_id = category_id;
+    this.institution = institution;
+    this.email = email;
+    this.password = password;
+  }
+  user_id: string;
+  user_name: string;
+  first_name: string;
+  last_name: string;
+  category_id: number;
+  institution: string;
+  email: string;
+  password: string;
+}
