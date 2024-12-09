@@ -1,5 +1,5 @@
 import express from "express";
-import { user_login, user_registration } from "../model/User";
+import {  user_login, user_registration } from "../model/User";
 import { createActivateQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery } from "../components/createQuery";
 import client from "../db/client";
 import { comparePassword, hashPassword } from "../components/hashUtils";
@@ -8,8 +8,31 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, getTokenInfoController, MyInfoGetController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, getTokenInfoController, MyInfoGetController, ProfileEditController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
+import { profile } from "console";
+
+// 型定義
+type ProfileEditRequestBody = {
+  user_name?: string;
+  first_name?: string;
+  last_name?: string;
+  category_id?: number;
+  email?: string;
+  password?: string;
+  institution?: string;
+};
+
+type profile_edit = {
+  user_id: string;
+  user_name?: string;
+  first_name?: string;
+  last_name?: string;
+  category_id?: number;
+  email?: string;
+  password?: string;
+  institution?: string;
+}
 
 
 const router = express.Router();
@@ -197,9 +220,76 @@ router.post("/register", async(req, res) => {
 });
 
 //ユーザ情報の更新
-//未実装
-router.put("/:userId", async(req, res) => {
+router.put("/", async(req, res) => {
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  console.log("ユーザ情報の更新を開始");
+
+  // リクエストボディから更新項目を取得
+  const { user_name, first_name, last_name, category_id, email, password, institution } = req.body;
+
+  //ボディになんの情報もない場合はエラーを返す
+  if (!user_name && !first_name && !last_name && !category_id && !email && !password && !institution) {
+    res.status(400).send("更新する情報がありません");
+    return;
+  }
+
   
+
+  try {
+    const profile: profile_edit = {
+      user_id: payload.user_id,
+      ...(user_name && { user_name }),
+      ...(first_name && { first_name }),
+      ...(last_name && { last_name }),
+      ...(category_id && { category_id }),
+      ...(email && { email }),
+      ...(password && { password }),
+      ...(institution && { institution }),
+      // user_name: String(user_name) || "" ,// nullならば空の文字列にする
+      // first_name: String(first_name) || "", //nullならば空の文字列にする
+      // last_name: String(last_name) || "", //nullならば空の文字列にする
+      // category_id: Number(category_id) || 0, //nullならば0にする
+      // institution: String(institution) || "", //nullならば空の文字列にする
+      // email: String(email) || "", //nullならば空の文字列にする
+      // password: String(password) || "" //nullならば空の文字列にする
+    }
+
+    let token;
+    //emailまたは所属が入力されている場合、トークンの生成を行う
+    // if(profile.email || profile.institution) {
+    //   token = await createVerificationToken(payload.user_id, 1);
+    // }
+
+    await ProfileEditController(profile);
+
+
+    res.status(200).send("ユーザ情報の更新が完了しました");
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
+    }
+  }
+
+
 });
 
 //登録確認メールの再送信

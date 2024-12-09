@@ -15,6 +15,17 @@ export class user_verify {
   category_id: string;
 }
 
+type profile_edit = {
+  user_id: string;
+  user_name?: string;
+  first_name?: string;
+  last_name?: string;
+  category_id?: number;
+  email?: string;
+  password?: string;
+  institution?: string;
+}
+
 export const UserRegistrationController = async (user: user_registration): Promise<mailInfo> => {
   console.log("User Registration Controller");
   let check = false;
@@ -62,6 +73,107 @@ export const UserRegistrationController = async (user: user_registration): Promi
     console.log("disconnected\n");
   }
   
+}
+
+export const ProfileEditController = async (profile: profile_edit): Promise<string> => {
+  let client;
+  try {
+    client = await pool.connect();
+
+    // 更新するフィールドを動的に構築
+    const fieldsToUpdate: string[] = [];
+    const values: any[] = [];
+    let placeholderIndex = 1;
+
+    if (profile.user_name) {
+      console.log("put user_name");
+      console.log(`user_name: ${profile.user_name}`);
+      fieldsToUpdate.push(`user_name = $${placeholderIndex++}`);
+      values.push(profile.user_name);
+    }
+    if (profile.first_name) {
+      console.log("put first_name");
+      console.log(`first_name: ${profile.first_name}`);
+      fieldsToUpdate.push(`first_name = $${placeholderIndex++}`);
+      values.push(profile.first_name);
+    }
+    //空の文字列でないとき
+    if (profile.last_name) {
+      console.log("put last_name");
+      console.log(`last_name: ${profile.last_name}`);
+      fieldsToUpdate.push(`last_name = $${placeholderIndex++}`);
+      values.push(profile.last_name);
+    }
+    // if (category_id) {
+    //   fieldsToUpdate.push(`category_id = $${placeholderIndex++}`);
+    //   values.push(category_id);
+    // }
+    // if (email) {
+    //   // メール変更の確認メール送信処理（仮）
+    //   fieldsToUpdate.push(`email = $${placeholderIndex++}`);
+    //   values.push(email);
+    // }
+    if (profile.password) {
+      console.log("put password");
+      console.log(`password: ${profile.password}`);
+      //パスワードをハッシュ化
+      const hashedPassword = await hashPassword(profile.password);
+      fieldsToUpdate.push(`password = $${placeholderIndex++}`);
+      values.push(hashedPassword);
+    }
+    //institutionがあるばあい undefinedはダメ
+    if (profile.institution !== undefined) {
+      console.log("put institution");
+      console.log(`institution: ${profile.institution}`);
+      fieldsToUpdate.push(`institution = $${placeholderIndex++}`);
+      values.push(profile.institution);
+    }
+
+    if (fieldsToUpdate.length === 0) {
+      throw new Error("アップデートする項目がありません");
+    }
+
+    // ユーザ情報の更新
+    const query = `
+      UPDATE users
+      SET ${fieldsToUpdate.join(", ")}
+      WHERE id = $${placeholderIndex}
+      RETURNING *
+    `;
+
+    console.log(query);
+
+
+
+    // トランザクション開始
+    await client.query("BEGIN");
+
+    //メール送信が必要ないプロフィールの更新
+    await client.query(query, [...values, profile.user_id]);
+
+    //emailまたはcategory_idの変更を伴う場合
+    if (profile.category_id || profile.email) {
+
+      //トークンの生成
+      
+      //クエリの作成
+      
+    }
+    
+    
+    await client.query("COMMIT");
+
+    return "temp";
+    
+  } catch (error) {
+    console.log(error);
+    throw new Error("Error editing profile");
+  } finally {
+    if (client) {
+      //client.release();
+    }
+    console.log("disconnected\n");
+  }
 }
 
 //ユーザ認証のためのメールを再送信する
