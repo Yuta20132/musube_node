@@ -4,6 +4,7 @@ import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
+import crypto from 'crypto';
 
 //getTokenInfoControllerで取得したcategory_idとuser_idを返却するためのクラス
 export class user_verify {
@@ -75,7 +76,7 @@ export const UserRegistrationController = async (user: user_registration): Promi
   
 }
 
-export const ProfileEditController = async (profile: profile_edit): Promise<string> => {
+export const ProfileEditController = async (profile: profile_edit): Promise<boolean> => {
   let client;
   try {
     client = await pool.connect();
@@ -129,48 +130,118 @@ export const ProfileEditController = async (profile: profile_edit): Promise<stri
       values.push(profile.institution);
     }
 
-    if (fieldsToUpdate.length === 0) {
+    //fieldsToUpdateが空かつ、category_idとemailが空の場合
+    if (fieldsToUpdate.length === 0 && !profile.category_id && !profile.email) {
+      console.log(`アップデート項目なし userController`);
+      console.log(`fieldsToUpdate: ${fieldsToUpdate}`);
+      console.log(`category_id: ${profile.category_id}`);
+      console.log(`email: ${profile.email}`);
       throw new Error("アップデートする項目がありません");
     }
 
     // ユーザ情報の更新
-    const query = `
+    const query_update = `
       UPDATE users
       SET ${fieldsToUpdate.join(", ")}
       WHERE id = $${placeholderIndex}
       RETURNING *
     `;
 
-    console.log(query);
-
-
+    console.log(query_update);
 
     // トランザクション開始
     await client.query("BEGIN");
 
-    //メール送信が必要ないプロフィールの更新
-    await client.query(query, [...values, profile.user_id]);
+    //メール送信が必要ないプロフィールの更新（fieldsToUpdateがあるとき）
+    if (fieldsToUpdate.length > 0) {
+      //クエリの実行
+      const result = await client.query(query_update, [...values, profile.user_id]);
+      console.log("result");
+    }
 
     //emailまたはcategory_idの変更を伴う場合
     if (profile.category_id || profile.email) {
-
-      //トークンの生成
       
+      // 有効期限を1日後に設定
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 1);
       //クエリの作成
+      //emailとcategory_idの変更はメール認証後なので、いったんpending_user_changesに保存しておく
+      //まずはcategory_idの変更がある場合
+      let query_pending_category;
+      if (profile.category_id) {
+        console.log("変更保留:category_id");
+        // トークンの生成
+        const token = crypto.randomBytes(32).toString('hex');
+        query_pending_category = `
+        INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
+        SELECT $1, 'category_id', $2, $3, $4, $5
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM pending_user_changes
+            WHERE user_id = $6 AND field_name = 'category_id'
+        );
+        `
+
+        //クエリの実行
+        const result = await client.query(query_pending_category, [profile.user_id, profile.category_id, token, false, expiresAt, profile.user_id]);
+
+        //pending_user_changesに挿入できなかった場合
+        if (result.rowCount === 0) {
+          throw new Error("現在カテゴリの変更が保留されています");
+        }
+      }
+
+      //emailの変更がある場合
+      let query_pending_email;
+      if (profile.email) {
+        // トークンの生成
+        const token = crypto.randomBytes(32).toString('hex');
+        console.log("変更保留");
+        query_pending_email = `
+        INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
+        SELECT $1, 'email', $2, $3, $4, $5
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM pending_user_changes
+            WHERE user_id = $6 AND field_name = 'email'
+        );
+        `
+
+        //クエリの実行
+        const result = await client.query(query_pending_email, [profile.user_id, profile.email, token, false, expiresAt, profile.user_id]);
+
+        //pending_user_changesに挿入できなかった場合
+        if (result.rowCount === 0) {
+          throw new Error("現在メールアドレスの変更が保留されています");
+        }
+      }
+
+
+      //メール送信
+      // sendMail(email, token);
       
     }
     
     
     await client.query("COMMIT");
 
-    return "temp";
+    return true;
     
   } catch (error) {
     console.log(error);
-    throw new Error("Error editing profile");
+    if (client) {
+      await client.query("ROLLBACK");
+    }
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("Error editing profile");
+    }
+
   } finally {
     if (client) {
-      //client.release();
+      client.release();
     }
     console.log("disconnected\n");
   }

@@ -254,20 +254,13 @@ router.put("/", async(req, res) => {
   try {
     const profile: profile_edit = {
       user_id: payload.user_id,
-      ...(user_name && { user_name }),
+      ...(user_name && { user_name }),//user_nameがあればuser_nameを追加
       ...(first_name && { first_name }),
       ...(last_name && { last_name }),
       ...(category_id && { category_id }),
       ...(email && { email }),
       ...(password && { password }),
       ...(institution && { institution }),
-      // user_name: String(user_name) || "" ,// nullならば空の文字列にする
-      // first_name: String(first_name) || "", //nullならば空の文字列にする
-      // last_name: String(last_name) || "", //nullならば空の文字列にする
-      // category_id: Number(category_id) || 0, //nullならば0にする
-      // institution: String(institution) || "", //nullならば空の文字列にする
-      // email: String(email) || "", //nullならば空の文字列にする
-      // password: String(password) || "" //nullならば空の文字列にする
     }
 
     let token;
@@ -276,7 +269,7 @@ router.put("/", async(req, res) => {
     //   token = await createVerificationToken(payload.user_id, 1);
     // }
 
-    await ProfileEditController(profile);
+    const flag = await ProfileEditController(profile);
 
 
     res.status(200).send("ユーザ情報の更新が完了しました");
