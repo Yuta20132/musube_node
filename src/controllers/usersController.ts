@@ -78,6 +78,7 @@ export const UserRegistrationController = async (user: user_registration): Promi
 }
 
 export const ProfileEditController = async (profile: profile_edit): Promise<boolean> => {
+  console.log("Profile Edit Controller");
   let client;
   try {
     client = await pool.connect();
@@ -163,7 +164,10 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
       console.log("result");
     }
 
-    if (profile.category_id) {
+    console.log(`category_id ${profile.category_id}`);
+    //category_idがundefinedでない場合
+    if (profile.category_id)  {
+      console.log("category_idがある");
       // 有効期限を1日後に設定
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 1);
@@ -204,7 +208,10 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
 
         return true;
     }
-
+      
+    }
+    
+    console.log(`email ${profile.email}`);
     //カテゴリIDの変更がない場合
     if (profile.email) {
       //カテゴリIDの変更がある場合
@@ -250,9 +257,6 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
         }
       }
     }
-      
-    }
-    
     
     await client.query("COMMIT");
 
