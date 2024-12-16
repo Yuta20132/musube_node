@@ -5,6 +5,7 @@ import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
 import crypto from 'crypto';
+import { sendMail } from "../components/sendMail";
 
 //getTokenInfoControllerで取得したcategory_idとuser_idを返却するためのクラス
 export class user_verify {
@@ -156,12 +157,13 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
     if (fieldsToUpdate.length > 0) {
       //クエリの実行
       const result = await client.query(query_update, [...values, profile.user_id]);
+      if (result.rowCount === 0) {
+        throw new Error("プロフィールの変更ができませんでした");
+      }
       console.log("result");
     }
 
-    //emailまたはcategory_idの変更を伴う場合
-    if (profile.category_id || profile.email) {
-      
+    if (profile.category_id) {
       // 有効期限を1日後に設定
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 1);
@@ -170,7 +172,7 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
       //まずはcategory_idの変更がある場合
       let query_pending_category;
       if (profile.category_id) {
-        console.log("変更保留:category_id");
+        console.log("変更:category_id");
         // トークンの生成
         const token = crypto.randomBytes(32).toString('hex');
         query_pending_category = `
@@ -190,14 +192,36 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
         if (result.rowCount === 0) {
           throw new Error("現在カテゴリの変更が保留されています");
         }
-      }
 
-      //emailの変更がある場合
+        console.log("カテゴリID変更のメール送信");
+        //profile.emailがある場合
+        if (profile.email) {
+          await sendMail(profile.email, token, 2);
+        } else {
+          //emailがない場合
+          throw new Error("emailが指定されていません");
+        }
+
+        return true;
+    }
+
+    //カテゴリIDの変更がない場合
+    if (profile.email) {
+      //カテゴリIDの変更がある場合
+      if (profile.category_id) {
+        throw new Error("カテゴリIDとemailの変更は同時にできません");
+      }
+      // 有効期限を1日後に設定
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 1);
+      //クエリの作成
+      //emailとcategory_idの変更はメール認証後なので、いったんpending_user_changesに保存しておく
+      //まずはcategory_idの変更がある場合
       let query_pending_email;
       if (profile.email) {
+        console.log("変更:email");
         // トークンの生成
         const token = crypto.randomBytes(32).toString('hex');
-        console.log("変更保留");
         query_pending_email = `
         INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
         SELECT $1, 'email', $2, $3, $4, $5
@@ -215,11 +239,17 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
         if (result.rowCount === 0) {
           throw new Error("現在メールアドレスの変更が保留されています");
         }
+
+        console.log("メールアドレス変更のメール送信");
+        //profile.emailがある場合(新しいメールアドレス)
+        if (profile.email) {
+          await sendMail(profile.email, token,3);
+        } else {
+          //emailがない場合
+          throw new Error("emailが指定されていません");
+        }
       }
-
-
-      //メール送信
-      // sendMail(email, token);
+    }
       
     }
     

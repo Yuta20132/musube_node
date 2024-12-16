@@ -191,7 +191,7 @@ router.post("/register", async(req, res) => {
     const token = await createVerificationToken(mailInfo.id, 1);
 
     //メール送信
-    await sendMail(mailInfo.email, token);
+    await sendMail(mailInfo.email, token,1);
 
     //ステータスコード200とメッセージを返す
     res.status(200).send("仮登録完了");
@@ -249,6 +249,12 @@ router.put("/", async(req, res) => {
     return;
   }
 
+  //emailとcategory_idがどちらもある場合はエラーを返す(ページ的にどちらも送られてくることはないから)
+  if(email && category_id) {
+    res.status(400).send("不正なパラメータ");
+    return;
+  }
+
   
 
   try {
@@ -258,7 +264,7 @@ router.put("/", async(req, res) => {
       ...(first_name && { first_name }),
       ...(last_name && { last_name }),
       ...(category_id && { category_id }),
-      ...(email && { email }),
+      ...(email ? { email } : { email: payload.email }), // emailがあればそれを使用、なければpayload.emailを設定
       ...(password && { password }),
       ...(institution && { institution }),
     }
@@ -284,6 +290,8 @@ router.put("/", async(req, res) => {
 
 
 });
+
+
 
 //登録確認メールの再送信
 router.get("/register_resend", async(req, res) => {
@@ -327,7 +335,7 @@ router.get("/register_resend", async(req, res) => {
     const token = await createVerificationToken(mailInfo.id, 1);
 
     //メール送信
-    await sendMail(email, token);
+    await sendMail(email, token,1);
 
     //ステータスコード200とメッセージを返す
     res.status(200).send("メールを再送信しました");
@@ -425,6 +433,7 @@ router.post("/login", async(req, res) => {
     const token = generateJWT({
       user_id: user.user_id,
       category_id: user.category_id,
+      email: email
     });
 
     //クッキーにトークンをセット
