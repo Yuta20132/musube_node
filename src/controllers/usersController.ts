@@ -1,5 +1,5 @@
 import { create } from "domain";
-import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
+import { createActivateQuery, createDeletePendingUserChangesQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery, createUpdateUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
@@ -375,10 +375,12 @@ export const UserValidationController = async (uv: user_verify): Promise<boolean
 }
 
 //プロフィール編集の有効化
-export const ProfileValidationController = async (token: string): Promise<boolean> => {
+export const ProfileValidationController = async (token: string) => {
   let client;
   try {
     client = await pool.connect();
+    //トランザクション開始
+    await client.query("BEGIN");
     console.log("connected");
 
     //pending_user_changesからtokenで検索するクエリを作成
@@ -390,8 +392,33 @@ export const ProfileValidationController = async (token: string): Promise<boolea
 
     console.log(result.rows[0]);
 
-    return true;
+    if(result.rows.length === 0) {
+      throw new Error("トークンが見つかりませんでした");
+    }
 
+    if(result.rows[0].expires_at < new Date()) {
+      throw new Error("トークンの有効期限が切れています");
+    }
+
+    
+    const query_update = createUpdateUserQuery(result.rows[0].field_name);
+    console.log(query_update);
+
+    const result_update = await client.query(query_update, [result.rows[0].new_value, result.rows[0].user_id]);
+
+    if(result_update.rowCount === 0) {
+      throw new Error("プロフィールの変更ができませんでした");
+    }
+
+    //pending_user_changesから削除
+    const query_pending_delete = createDeletePendingUserChangesQuery();
+    const result_delete = await client.query(query_pending_delete, [result.rows[0].id]);
+
+    if(result_delete.rowCount === 0) {
+      throw new Error("トークンの削除ができませんでした");
+    }
+
+    await client.query("COMMIT");
 
   } catch (error) {
     console.log(error);

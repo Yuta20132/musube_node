@@ -432,18 +432,16 @@ router.post("/verify-profile", async(req, res) => {
     //トークンを検証
     console.log("token:" + token);
 
-    const flag = await ProfileValidationController(token);
-    //const uv: user_verify = await getTokenInfoController(token);
-
-    //const is_success = await UserValidationController(uv);
-
-    // console.log(is_success);
-    // if(is_success) {
-
-    // }
-    res.status(200).send("test");
+    await ProfileValidationController(token);
+    res.status(200).send("プロフィール変更が完了しました");
   } catch (error) {
-  
+    console.log(error);
+    if (error instanceof Error) {
+      //ステータスコード400とエラーメッセージを返す
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send("ユーザ認証に失敗しました");
+    }
   }
 })
 
