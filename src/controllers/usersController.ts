@@ -1,5 +1,5 @@
 import { create } from "domain";
-import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
+import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
@@ -324,6 +324,7 @@ export const UserReSendMailController = async (id: string): Promise<mailInfo> =>
   }
 }
 
+//ユーザの有効化
 export const UserValidationController = async (uv: user_verify): Promise<boolean> => {
   let check = false;
 
@@ -343,9 +344,9 @@ export const UserValidationController = async (uv: user_verify): Promise<boolean
       console.log("ユーザの有効化");
       //ユーザ情報を更新
       query = createActivateQuery();
-    } else if (String(uv.category_id) === "2" || String(uv.category_id) === "3") { //2または3の場合
+    } else if (String(uv.category_id) === "2" || String(uv.category_id) === "3" || String(uv.category_id) === "4") { //2または3の場合
       //一旦ここは保留
-
+      throw new Error("送るエンドポイントが違います")
       query = "test";
     } else {
       throw new Error("カテゴリが不正です");
@@ -367,6 +368,40 @@ export const UserValidationController = async (uv: user_verify): Promise<boolean
   } finally {
     //データベースとの接続を切断
     if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+//プロフィール編集の有効化
+export const ProfileValidationController = async (token: string): Promise<boolean> => {
+  let client;
+  try {
+    client = await pool.connect();
+    console.log("connected");
+
+    //pending_user_changesからtokenで検索するクエリを作成
+    const query = createGetPendingUserChangesQuery();
+
+    const result = await client.query(query, [token]);
+
+    console.dir(result, { depth: null });
+
+    console.log(result.rows[0]);
+
+    return true;
+
+
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("Error validating profile");
+    }
+  } finally {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");

@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, getTokenInfoController, MyInfoGetController, ProfileEditController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, getTokenInfoController, MyInfoGetController, ProfileEditController, ProfileValidationController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { profile } from "console";
 
@@ -407,6 +407,45 @@ router.post("/verify", async(req, res) => {
     res.status(400).send("ユーザ認証に失敗しました");
   }
 });
+
+//プロフィール変更の認証
+//ここでいうtokenは、メール認証のtokenであり、Cookieに保存されているtokenではない
+router.post("/verify-profile", async(req, res) => {
+  console.log("プロフィール変更の認証");
+
+  let token;
+
+  //tokenがリクエストボディにあれば取得
+  if (!req.body.token) {
+    res.status(400).send("トークンがありません");
+    return;
+  } else {
+    if (typeof req.body.token !== "string") {
+      res.status(400).send("トークンが文字列ではありません");
+      return;
+    } else {
+      token = String(req.body.token);
+    }
+  }
+  
+  try {
+    //トークンを検証
+    console.log("token:" + token);
+
+    const flag = await ProfileValidationController(token);
+    //const uv: user_verify = await getTokenInfoController(token);
+
+    //const is_success = await UserValidationController(uv);
+
+    // console.log(is_success);
+    // if(is_success) {
+
+    // }
+    res.status(200).send("test");
+  } catch (error) {
+  
+  }
+})
 
 //ログイン
 router.post("/login", async(req, res) => {
