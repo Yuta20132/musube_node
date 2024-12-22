@@ -16,7 +16,7 @@ const WS_PORT = 8080;
 // カスタムCORS設定
 const corsOptions = {
   origin: '*', // 許可するオリジン
-  methods: 'GET,POST', // 許可するHTTPメソッド
+  methods: 'GET,POST,PUT,DELETE', // 許可するHTTPメソッド
   allowedHeaders: 'Content-Type,Authorization' // 許可するヘッダー
 };
 
