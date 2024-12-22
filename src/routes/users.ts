@@ -1,5 +1,5 @@
 import express from "express";
-import { user_login, user_registration } from "../model/User";
+import {  user_login, user_registration } from "../model/User";
 import { createActivateQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery } from "../components/createQuery";
 import client from "../db/client";
 import { comparePassword, hashPassword } from "../components/hashUtils";
@@ -8,8 +8,31 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, MyInfoGetController, SearchUsersController, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, getTokenInfoController, MyInfoGetController, ProfileEditController, ProfileValidationController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
+import { profile } from "console";
+
+// 型定義
+type ProfileEditRequestBody = {
+  user_name?: string;
+  first_name?: string;
+  last_name?: string;
+  category_id?: number;
+  email?: string;
+  password?: string;
+  institution?: string;
+};
+
+type profile_edit = {
+  user_id: string;
+  user_name?: string;
+  first_name?: string;
+  last_name?: string;
+  category_id?: number;
+  email?: string;
+  password?: string;
+  institution?: string;
+}
 
 
 const router = express.Router();
@@ -166,10 +189,10 @@ router.post("/register", async(req, res) => {
     const  mailInfo = await UserRegistrationController(user);
 
     //トークンの生成
-    const token = await createVerificationToken(mailInfo.id);
+    const token = await createVerificationToken(mailInfo.id, 1);
 
     //メール送信
-    await sendMail(mailInfo.email, token);
+    await sendMail(mailInfo.email, token,1);
 
     //ステータスコード200とメッセージを返す
     res.status(200).send("仮登録完了");
@@ -197,8 +220,82 @@ router.post("/register", async(req, res) => {
 
 });
 
+//ユーザ情報の更新
+router.put("/", async(req, res) => {
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  console.log("ユーザ情報の更新を開始");
+
+  // リクエストボディから更新項目を取得
+  const { user_name, first_name, last_name, category_id, email, password, institution } = req.body;
+
+  //ボディになんの情報もない場合はエラーを返す
+  if (!user_name && !first_name && !last_name && !category_id && !email && !password && !institution) {
+    res.status(400).send("更新する情報がありません");
+    return;
+  }
+
+  //emailとcategory_idがどちらもある場合はエラーを返す(ページ的にどちらも送られてくることはないから)
+  if(email && category_id) {
+    res.status(400).send("不正なパラメータ");
+    return;
+  }
+
+  
+
+  try {
+    const profile: profile_edit = {
+      user_id: payload.user_id,
+      ...(user_name && { user_name }),//user_nameがあればuser_nameを追加
+      ...(first_name && { first_name }),
+      ...(last_name && { last_name }),
+      ...(category_id && { category_id }),
+      ...(email ? { email } : { email: payload.email }), // emailがあればそれを使用、なければpayload.emailを設定
+      ...(password && { password }),
+      ...(institution && { institution }),
+    }
+
+    let token;
+    //emailまたは所属が入力されている場合、トークンの生成を行う
+    // if(profile.email || profile.institution) {
+    //   token = await createVerificationToken(payload.user_id, 1);
+    // }
+
+    const flag = await ProfileEditController(profile);
+
+
+    res.status(200).send("ユーザ情報の更新が完了しました");
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
+    }
+  }
+
+
+});
+
+
+
 //登録確認メールの再送信
-router.post("/register_resend", async(req, res) => {
+router.get("/register_resend", async(req, res) => {
 
   //トークンがあるか確認
   const token = req.cookies.bulletin_token;
@@ -236,10 +333,10 @@ router.post("/register_resend", async(req, res) => {
     const mailInfo = await UserReSendMailController(email);
 
     //トークンの生成
-    const token = await createVerificationToken(mailInfo.id);
+    const token = await createVerificationToken(mailInfo.id, 1);
 
     //メール送信
-    await sendMail(email, token);
+    await sendMail(email, token,1);
 
     //ステータスコード200とメッセージを返す
     res.status(200).send("メールを再送信しました");
@@ -257,26 +354,50 @@ router.post("/register_resend", async(req, res) => {
   }
 });
 
-//http://localhost:8080/users/validate/?id=xxxx
+//プロフィール編集の際のメールの再送信
+//未実装
+router.post("/profile_resend", async(req, res) => {
+ 
+})
+
+
+//http://localhost:8080/users/verify
 //メール認証
-router.post("/validate", async(req, res) => {
-  console.log("Validating user");
-  if(!req.query.id) {
-    res.status(400).send("ID not found");
+//未実装
+router.post("/verify", async(req, res) => {
+  console.log("メール認証");
+
+  let token;
+  console.log(req.body.token);
+
+  //tokenがリクエストボディにあれば取得
+  if (!req.body.token) {
+    res.status(400).send("トークンがありません");
     return;
-  } else if(typeof req.query.id !== "string") {
-    res.status(400).send("Invalid ID");
-    return;
+  } else {
+    if (typeof req.body.token !== "string") {
+      res.status(400).send("トークンが文字列ではありません");
+      return;
+    } else {
+      token = String(req.body.token);
+    }
   }
-  const id = req.query.id;
   
   try {
-    const is_success = await UserValidationController(id);
+    //トークンを検証
+    console.log("token:" + token);
+    const uv: user_verify = await getTokenInfoController(token);
+
+    const is_success = await UserValidationController(uv);
 
     console.log(is_success);
     if(is_success) {
+      console.log("ユーザ認証完了");
       //ステータスコード200とメッセージを返す
       res.status(200).send("ユーザ認証が完了しました");
+      return;
+    } else {
+      res.status(400).send("ユーザ認証に失敗しました");
       return;
     }
 
@@ -287,6 +408,43 @@ router.post("/validate", async(req, res) => {
     res.status(400).send("ユーザ認証に失敗しました");
   }
 });
+
+//プロフィール変更の認証
+//ここでいうtokenは、メール認証のtokenであり、Cookieに保存されているtokenではない
+router.post("/verify-profile", async(req, res) => {
+  console.log("プロフィール変更の認証");
+
+  let token;
+
+  //tokenがリクエストボディにあれば取得
+  if (!req.body.token) {
+    res.status(400).send("トークンがありません");
+    return;
+  } else {
+    if (typeof req.body.token !== "string") {
+      res.status(400).send("トークンが文字列ではありません");
+      return;
+    } else {
+      token = String(req.body.token);
+    }
+  }
+  
+  try {
+    //トークンを検証
+    console.log("token:" + token);
+
+    await ProfileValidationController(token);
+    res.status(200).send("プロフィール変更が完了しました");
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      //ステータスコード400とエラーメッセージを返す
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send("ユーザ認証に失敗しました");
+    }
+  }
+})
 
 //ログイン
 router.post("/login", async(req, res) => {
@@ -313,6 +471,7 @@ router.post("/login", async(req, res) => {
     const token = generateJWT({
       user_id: user.user_id,
       category_id: user.category_id,
+      email: email
     });
 
     //クッキーにトークンをセット

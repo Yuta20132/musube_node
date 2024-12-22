@@ -1,10 +1,32 @@
 import { create } from "domain";
-import { createActivateQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery } from "../components/createQuery";
+import { createActivateQuery, createDeletePendingUserChangesQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery, createUpdateUserQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
+import crypto from 'crypto';
+import { sendMail } from "../components/sendMail";
 
+//getTokenInfoControllerで取得したcategory_idとuser_idを返却するためのクラス
+export class user_verify {
+  constructor( user_id: string, category_id: string) {
+    this.user_id = user_id;
+    this.category_id = category_id;
+  }
+  user_id: string;
+  category_id: string;
+}
+
+type profile_edit = {
+  user_id: string;
+  user_name?: string;
+  first_name?: string;
+  last_name?: string;
+  category_id?: number;
+  email?: string;
+  password?: string;
+  institution?: string;
+}
 
 export const UserRegistrationController = async (user: user_registration): Promise<mailInfo> => {
   console.log("User Registration Controller");
@@ -55,6 +77,210 @@ export const UserRegistrationController = async (user: user_registration): Promi
   
 }
 
+export const ProfileEditController = async (profile: profile_edit): Promise<boolean> => {
+  console.log("Profile Edit Controller");
+  let client;
+  try {
+    client = await pool.connect();
+
+    // 更新するフィールドを動的に構築
+    const fieldsToUpdate: string[] = [];
+    const values: any[] = [];
+    let placeholderIndex = 1;
+
+    if (profile.user_name) {
+      console.log("put user_name");
+      console.log(`user_name: ${profile.user_name}`);
+      fieldsToUpdate.push(`user_name = $${placeholderIndex++}`);
+      values.push(profile.user_name);
+    }
+    if (profile.first_name) {
+      console.log("put first_name");
+      console.log(`first_name: ${profile.first_name}`);
+      fieldsToUpdate.push(`first_name = $${placeholderIndex++}`);
+      values.push(profile.first_name);
+    }
+    //空の文字列でないとき
+    if (profile.last_name) {
+      console.log("put last_name");
+      console.log(`last_name: ${profile.last_name}`);
+      fieldsToUpdate.push(`last_name = $${placeholderIndex++}`);
+      values.push(profile.last_name);
+    }
+    // if (category_id) {
+    //   fieldsToUpdate.push(`category_id = $${placeholderIndex++}`);
+    //   values.push(category_id);
+    // }
+    // if (email) {
+    //   // メール変更の確認メール送信処理（仮）
+    //   fieldsToUpdate.push(`email = $${placeholderIndex++}`);
+    //   values.push(email);
+    // }
+    if (profile.password) {
+      console.log("put password");
+      console.log(`password: ${profile.password}`);
+      //パスワードをハッシュ化
+      const hashedPassword = await hashPassword(profile.password);
+      fieldsToUpdate.push(`password = $${placeholderIndex++}`);
+      values.push(hashedPassword);
+    }
+    //institutionがあるばあい undefinedはダメ
+    if (profile.institution !== undefined) {
+      console.log("put institution");
+      console.log(`institution: ${profile.institution}`);
+      fieldsToUpdate.push(`institution = $${placeholderIndex++}`);
+      values.push(profile.institution);
+    }
+
+    //fieldsToUpdateが空かつ、category_idとemailが空の場合
+    if (fieldsToUpdate.length === 0 && !profile.category_id && !profile.email) {
+      console.log(`アップデート項目なし userController`);
+      console.log(`fieldsToUpdate: ${fieldsToUpdate}`);
+      console.log(`category_id: ${profile.category_id}`);
+      console.log(`email: ${profile.email}`);
+      throw new Error("アップデートする項目がありません");
+    }
+
+    // ユーザ情報の更新
+    const query_update = `
+      UPDATE users
+      SET ${fieldsToUpdate.join(", ")}
+      WHERE id = $${placeholderIndex}
+      RETURNING *
+    `;
+
+    console.log(query_update);
+
+    // トランザクション開始
+    await client.query("BEGIN");
+
+    //メール送信が必要ないプロフィールの更新（fieldsToUpdateがあるとき）
+    if (fieldsToUpdate.length > 0) {
+      //クエリの実行
+      const result = await client.query(query_update, [...values, profile.user_id]);
+      if (result.rowCount === 0) {
+        throw new Error("プロフィールの変更ができませんでした");
+      }
+      console.log("result");
+    }
+
+    console.log(`category_id ${profile.category_id}`);
+    //category_idがundefinedでない場合
+    if (profile.category_id)  {
+      console.log("category_idがある");
+      // 有効期限を1日後に設定
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 1);
+      //クエリの作成
+      //emailとcategory_idの変更はメール認証後なので、いったんpending_user_changesに保存しておく
+      //まずはcategory_idの変更がある場合
+      let query_pending_category;
+      if (profile.category_id) {
+        console.log("変更:category_id");
+        // トークンの生成
+        const token = crypto.randomBytes(32).toString('hex');
+        query_pending_category = `
+        INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
+        SELECT $1, 'category_id', $2, $3, $4, $5
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM pending_user_changes
+            WHERE user_id = $6 AND field_name = 'category_id'
+        );
+        `
+
+        //クエリの実行
+        const result = await client.query(query_pending_category, [profile.user_id, profile.category_id, token, false, expiresAt, profile.user_id]);
+
+        //pending_user_changesに挿入できなかった場合
+        if (result.rowCount === 0) {
+          throw new Error("現在カテゴリの変更が保留されています");
+        }
+
+        console.log("カテゴリID変更のメール送信");
+        //profile.emailがある場合
+        if (profile.email) {
+          await sendMail(profile.email, token, 2);
+        } else {
+          //emailがない場合
+          throw new Error("emailが指定されていません");
+        }
+
+        return true;
+    }
+      
+    }
+    
+    console.log(`email ${profile.email}`);
+    //カテゴリIDの変更がない場合
+    if (profile.email) {
+      //カテゴリIDの変更がある場合
+      if (profile.category_id) {
+        throw new Error("カテゴリIDとemailの変更は同時にできません");
+      }
+      // 有効期限を1日後に設定
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 1);
+      //クエリの作成
+      //emailとcategory_idの変更はメール認証後なので、いったんpending_user_changesに保存しておく
+      //まずはcategory_idの変更がある場合
+      let query_pending_email;
+      if (profile.email) {
+        console.log("変更:email");
+        // トークンの生成
+        const token = crypto.randomBytes(32).toString('hex');
+        query_pending_email = `
+        INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
+        SELECT $1, 'email', $2, $3, $4, $5
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM pending_user_changes
+            WHERE user_id = $6 AND field_name = 'email'
+        );
+        `
+
+        //クエリの実行
+        const result = await client.query(query_pending_email, [profile.user_id, profile.email, token, false, expiresAt, profile.user_id]);
+
+        //pending_user_changesに挿入できなかった場合
+        if (result.rowCount === 0) {
+          throw new Error("現在メールアドレスの変更が保留されています");
+        }
+
+        console.log("メールアドレス変更のメール送信");
+        //profile.emailがある場合(新しいメールアドレス)
+        if (profile.email) {
+          await sendMail(profile.email, token,3);
+        } else {
+          //emailがない場合
+          throw new Error("emailが指定されていません");
+        }
+      }
+    }
+    
+    await client.query("COMMIT");
+
+    return true;
+    
+  } catch (error) {
+    console.log(error);
+    if (client) {
+      await client.query("ROLLBACK");
+    }
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("Error editing profile");
+    }
+
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
 //ユーザ認証のためのメールを再送信する
 export const UserReSendMailController = async (id: string): Promise<mailInfo> => {
   let client;
@@ -98,7 +324,8 @@ export const UserReSendMailController = async (id: string): Promise<mailInfo> =>
   }
 }
 
-export const UserValidationController = async (id: string): Promise<boolean> => {
+//ユーザの有効化
+export const UserValidationController = async (uv: user_verify): Promise<boolean> => {
   let check = false;
 
   let client;
@@ -107,20 +334,136 @@ export const UserValidationController = async (id: string): Promise<boolean> => 
     client = await pool.connect();
     console.log("connected");
 
-    //ユーザー情報を更新
-    const query = createActivateQuery(id);
-    console.log(query);
+    let query;
 
-    const result = await client.query(query);
+    //uv.category_idの型を調べる
+    console.log(typeof uv.category_id);
 
-    check = true;
-    return check;
+
+    if (String(uv.category_id) === "1") {
+      console.log("ユーザの有効化");
+      //ユーザ情報を更新
+      query = createActivateQuery();
+    } else if (String(uv.category_id) === "2" || String(uv.category_id) === "3" || String(uv.category_id) === "4") { //2または3の場合
+      //一旦ここは保留
+      throw new Error("送るエンドポイントが違います")
+      query = "test";
+    } else {
+      throw new Error("カテゴリが不正です");
+    }
+
+
+    const result = await client.query(query, [uv.user_id]);
+    console.dir(result, { depth: null });
+
+    if(result.rowCount === 1) {
+      check = true;
+      return check;
+    } else {
+      throw new Error("ユーザの有効化に失敗しました");
+    }
   } catch (error) {
     console.log(error);
     throw new Error("Error validating user");
   } finally {
     //データベースとの接続を切断
     if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+//プロフィール編集の有効化
+export const ProfileValidationController = async (token: string) => {
+  let client;
+  try {
+    client = await pool.connect();
+    //トランザクション開始
+    await client.query("BEGIN");
+    console.log("connected");
+
+    //pending_user_changesからtokenで検索するクエリを作成
+    const query = createGetPendingUserChangesQuery();
+
+    const result = await client.query(query, [token]);
+
+    console.dir(result, { depth: null });
+
+    console.log(result.rows[0]);
+
+    if(result.rows.length === 0) {
+      throw new Error("トークンが見つかりませんでした");
+    }
+
+    if(result.rows[0].expires_at < new Date()) {
+      throw new Error("トークンの有効期限が切れています");
+    }
+
+    
+    const query_update = createUpdateUserQuery(result.rows[0].field_name);
+    console.log(query_update);
+
+    const result_update = await client.query(query_update, [result.rows[0].new_value, result.rows[0].user_id]);
+
+    if(result_update.rowCount === 0) {
+      throw new Error("プロフィールの変更ができませんでした");
+    }
+
+    //pending_user_changesから削除
+    const query_pending_delete = createDeletePendingUserChangesQuery();
+    const result_delete = await client.query(query_pending_delete, [result.rows[0].id]);
+
+    if(result_delete.rowCount === 0) {
+      throw new Error("トークンの削除ができませんでした");
+    }
+
+    await client.query("COMMIT");
+
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("Error validating profile");
+    }
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+export const getTokenInfoController = async (token: string):Promise<user_verify> => {
+  console.log("getTokenInfoController");
+  let client;
+  try {
+    client = await pool.connect();
+    console.log("connected");
+
+    const query = createGetTokenCategoryQuery();
+    const result = await client.query(query, [token]);
+    console.log("トークン情報");
+    console.dir(result, { depth: null });
+
+    if (result.rows.length === 0) {
+      throw new Error("トークンが見つかりませんでした");
+    } else {
+      if (result.rows[0].expires_at < new Date()) {
+        throw new Error("トークンの有効期限が切れています");
+      } else {
+        console.log(result.rows[0].category_id);
+        //user_verifyクラスのインスタンスを作成
+        const uv = new user_verify(result.rows[0].user_id, result.rows[0].category_id);
+        return uv;
+      }
+    }
+  } catch (error) {
+    console.log(error);
+    throw new Error("Error getting token info");
+  } finally {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");
