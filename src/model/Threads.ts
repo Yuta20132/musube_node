@@ -45,7 +45,7 @@ export type getPostsResponse = {
   thread_title: string;
   thread_description: string;
   rowCounts: number;
-  rows: {
+  rows?: {
     post_id: string;
     post_content: string;
     post_title: string;
