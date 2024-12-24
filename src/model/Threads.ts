@@ -54,3 +54,9 @@ export type getPostsResponse = {
     post_created_at: string;
   }[],
 }
+
+export type thread_info = {
+  title: string;
+  description: string;
+  category_id: Number;
+}
