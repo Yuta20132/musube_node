@@ -29,7 +29,7 @@ export interface post_registration {
 }
 
 export type getCommentsRequest = {
-  post_id: string;
+  post_id: Number;
 }
 
 export type getCommentsResponse = {
