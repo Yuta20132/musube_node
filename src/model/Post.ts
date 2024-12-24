@@ -27,3 +27,27 @@ export interface post_registration {
   content: string;
   title: string;
 }
+
+export type getCommentsRequest = {
+  post_id: string;
+}
+
+export type getCommentsResponse = {
+  post_id: string;
+  post_title: string;
+  post_content: string;
+  rowCounts: number;
+  rows?: {
+    comment_id: string;
+    comment_content: string;
+    user_id: string;
+    user_name: string; //usersテーブルから取得
+    comment_created_at: string;
+  }[],
+}
+
+export type post_info = {
+  title: string;
+  content: string;
+  category_id: Number;
+}
