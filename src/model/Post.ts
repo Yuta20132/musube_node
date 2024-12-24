@@ -33,7 +33,7 @@ export type getCommentsRequest = {
 }
 
 export type getCommentsResponse = {
-  post_id: string;
+  post_id: Number;
   post_title: string;
   post_content: string;
   rowCounts: number;

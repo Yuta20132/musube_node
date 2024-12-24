@@ -1,6 +1,6 @@
-import { createPostQuery } from "../components/createQuery";
+import { createGetCommentsByPostIdQuery, createGetPostInfoQuery, createPostQuery } from "../components/createQuery";
 import pool from "../db/client";
-import { post_registration } from "../model/Post";
+import { getCommentsRequest, getCommentsResponse, post_info, post_registration } from "../model/Post";
 export const PostCreateController = async (post: post_registration, category_id: Number) => {
 
   let client;
@@ -87,5 +87,81 @@ export const PostDeleteController = async (post_id: number) => {
       console.log("予期しないエラー", error);
       throw new Error("何らかのエラーが発生");
     }
+  }
+}
+
+export const PostGetController = async (post_id: Number): Promise<post_info> => {
+
+  let client;
+  try {
+    client = await pool.connect();
+    const query = createGetPostInfoQuery();
+    const result = await client.query(query, [post_id]);
+
+    if (result.rowCount === 0) {
+      throw new Error("指定された投稿は存在しません");
+    }
+
+    console.dir(result.rows[0]);
+
+    //post_infoの型を作成
+    const post_info: post_info = {
+      title: result.rows[0].title,
+      content: result.rows[0].content,
+      category_id: result.rows[0].category_id
+    }
+
+    return post_info;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("なんらかのエラーが発生しました" + error);
+    }
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+export const CommentGetByPostIdController = async (p_req: getCommentsRequest): Promise<getCommentsResponse> => {
+  let client;
+  try {
+    client = await pool.connect();
+    const query = createGetCommentsByPostIdQuery();
+
+    const result = await client.query(query, [p_req.post_id]);
+
+    //result.rowCountがnullの場合はエラーを返す
+    if (result.rowCount === null) {
+      throw new Error("データベースエラー");
+    }
+
+    if (result.rowCount === 0) {
+      throw new Error("指定された投稿にコメントはありません");
+    }
+
+    const response: getCommentsResponse = {
+      post_id: p_req.post_id,
+      post_content: "tmp",
+      post_title: "tmp",
+      rowCounts: result.rowCount,
+      rows: result.rows
+    }
+
+    return response;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("なんらかのエラーが発生しました" + error);
+    }
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
   }
 }

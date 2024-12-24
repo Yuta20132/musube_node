@@ -1,8 +1,8 @@
 import e from "express";
 import express from "express";
 import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
-import { PostCreateController, PostDeleteController } from "../controllers/postController";
-import { post_registration } from "../model/Post";
+import { CommentGetByPostIdController, PostCreateController, PostDeleteController, PostGetController } from "../controllers/postController";
+import { getCommentsRequest, post_registration } from "../model/Post";
 
 const router = express.Router();
 
@@ -152,6 +152,72 @@ router.delete("/", async (req, res) => {
   }
 
   
+})
+
+//ポストIDからコメントを取得
+router.get("/:post_id/comments", async (req, res) => {
+  //トークンがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+  //ポストIDを取得
+  const post_id = req.params.post_id;
+  //ポストIDがない場合はエラーを返す
+  if (post_id === undefined) {
+    res.status(400).send("ポストIDがありません");
+    return;
+  }
+
+  //ポストIDを数値に変換できない場合はエラーを返す
+  if (isNaN(Number(post_id))) {
+    res.status(400).send("ポストIDが数値ではありません");
+    return;
+  }
+
+  try {
+    //まず、ポストIDからポストの情報を取得
+    const post_info = await PostGetController(Number(post_id));
+
+    //payload.category_idが5（管理者）でない場合、かつ、ポストのカテゴリIDとpayload.category_idが一致しない場合かつ、post_info.category_idが1（全体）でない場合はエラーを返す
+    if (payload.category_id !== "5" && post_info.category_id !== Number(payload.category_id) && post_info.category_id !== 1) {
+      res.status(400).send("権限がありません");
+      return;
+    }
+
+    const req: getCommentsRequest = {
+      post_id: Number(post_id)
+    }
+
+    //ポストのIDからコメントを取得
+    const comments = await CommentGetByPostIdController(req);
+
+    //
+    comments.post_content = post_info.content;
+    comments.post_title = post_info.title;
+
+    res.status(200).send(comments);
+
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send("何らかのエラーが発生: " + error);
+    }
+  }
+
 })
 
 export default router;
