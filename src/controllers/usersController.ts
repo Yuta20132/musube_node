@@ -1,16 +1,33 @@
 import { create } from "domain";
-import { createActivateQuery, createDeletePendingUserChangesQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery, createUpdateUserQuery, createGetChangesByUserIdQuery, createUpdatePendingUserChangesQuery, createInsertPasswordResetTokenQuery } from "../components/createQuery";
+import {
+  createActivateQuery,
+  createDeletePendingUserChangesQuery,
+  createGetAllUsersQuery,
+  createGetMyInfoQuery,
+  createGetPendingUserChangesQuery,
+  createGetTokenCategoryQuery,
+  createGetUserByEmailQuery,
+  createLoginInfoQuery,
+  createLoginQuery,
+  createRegistrationQuery,
+  createSearchUserQuery,
+  createUpdateUserQuery,
+  createGetChangesByUserIdQuery,
+  createUpdatePendingUserChangesQuery,
+  createInsertPasswordResetTokenQuery,
+} from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
-import crypto from 'crypto';
+import crypto from "crypto";
 import { sendMail } from "../components/sendMail";
 import { TokenExpiredError } from "jsonwebtoken";
+import { convertUtcToJst } from "../components/timeUtils";
 
 //getTokenInfoControllerで取得したcategory_idとuser_idを返却するためのクラス
 export class user_verify {
-  constructor( user_id: string, category_id: string) {
+  constructor(user_id: string, category_id: string) {
     this.user_id = user_id;
     this.category_id = category_id;
   }
@@ -27,9 +44,11 @@ type profile_edit = {
   email?: string;
   password?: string;
   institution?: string;
-}
+};
 
-export const UserRegistrationController = async (user: user_registration): Promise<mailInfo> => {
+export const UserRegistrationController = async (
+  user: user_registration
+): Promise<mailInfo> => {
   console.log("User Registration Controller");
   let check = false;
 
@@ -40,45 +59,42 @@ export const UserRegistrationController = async (user: user_registration): Promi
   let client;
   try {
     //データベースに接続
-  client = await pool.connect();
-  console.log("connected");
+    client = await pool.connect();
+    console.log("connected");
 
-  //ユーザー情報をデータベースに登録
-  const result = await client.query(query);
-  console.log(result);
-  console.log("id:" + result.rows[0].id)
+    //ユーザー情報をデータベースに登録
+    const result = await client.query(query);
+    console.log(result);
+    console.log("id:" + result.rows[0].id);
 
-  //result.rows[0].idがあればメールを送信
-  // sendMail(email, result.rows[0].id);
-  if (result.rows[0].id != undefined) {
-    //send_emailクラスのインスタンスを作成
-    const mI = new mailInfo(result.rows[0].id, user.email);
-    return mI;
-  } else {
-    throw new Error("Error sending mail");
-  }
-  
-  } catch(err) {
+    //result.rows[0].idがあればメールを送信
+    // sendMail(email, result.rows[0].id);
+    if (result.rows[0].id != undefined) {
+      //send_emailクラスのインスタンスを作成
+      const mI = new mailInfo(result.rows[0].id, user.email);
+      return mI;
+    } else {
+      throw new Error("Error sending mail");
+    }
+  } catch (err) {
     //console.log(err);
     if (err instanceof Error) {
       throw new Error(err.message);
     } else {
       throw new Error("Error registering user");
     }
-
-    
-    
   } finally {
     //データベースとの接続を切断
-    if(client) {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");
   }
-  
-}
+};
 
-export const ProfileEditController = async (profile: profile_edit): Promise<boolean> => {
+export const ProfileEditController = async (
+  profile: profile_edit
+): Promise<boolean> => {
   console.log("Profile Edit Controller");
   let client;
   try {
@@ -158,7 +174,10 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
     //メール送信が必要ないプロフィールの更新（fieldsToUpdateがあるとき）
     if (fieldsToUpdate.length > 0) {
       //クエリの実行
-      const result = await client.query(query_update, [...values, profile.user_id]);
+      const result = await client.query(query_update, [
+        ...values,
+        profile.user_id,
+      ]);
       if (result.rowCount === 0) {
         throw new Error("プロフィールの変更ができませんでした");
       }
@@ -167,11 +186,14 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
 
     console.log(`category_id ${profile.category_id}`);
     //category_idがundefinedでない場合
-    if (profile.category_id)  {
+    if (profile.category_id) {
       console.log("category_idがある");
       // 有効期限を1日後に設定
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 1);
+
+      //日本時間に変換
+      const expires_at_jst = convertUtcToJst(expiresAt);
       //クエリの作成
       //emailとcategory_idの変更はメール認証後なので、いったんpending_user_changesに保存しておく
       //まずはcategory_idの変更がある場合
@@ -179,7 +201,7 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
       if (profile.category_id) {
         console.log("変更:category_id");
         // トークンの生成
-        const token = crypto.randomBytes(32).toString('hex');
+        const token = crypto.randomBytes(32).toString("hex");
         query_pending_category = `
         INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
         SELECT $1, 'category_id', $2, $3, $4, $5
@@ -188,10 +210,17 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
             FROM pending_user_changes
             WHERE user_id = $6 AND field_name = 'category_id'
         );
-        `
+        `;
 
         //クエリの実行
-        const result = await client.query(query_pending_category, [profile.user_id, profile.category_id, token, false, expiresAt, profile.user_id]);
+        const result = await client.query(query_pending_category, [
+          profile.user_id,
+          profile.category_id,
+          token,
+          false,
+          expires_at_jst,
+          profile.user_id,
+        ]);
 
         //pending_user_changesに挿入できなかった場合
         if (result.rowCount === 0) {
@@ -208,10 +237,9 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
         }
 
         return true;
+      }
     }
-      
-    }
-    
+
     console.log(`email ${profile.email}`);
     //カテゴリIDの変更がない場合
     if (profile.email) {
@@ -222,6 +250,8 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
       // 有効期限を1日後に設定
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 1);
+      //日本時間に変換
+      const expires_at_jst = convertUtcToJst(expiresAt);
       //クエリの作成
       //emailとcategory_idの変更はメール認証後なので、いったんpending_user_changesに保存しておく
       //まずはcategory_idの変更がある場合
@@ -229,7 +259,7 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
       if (profile.email) {
         console.log("変更:email");
         // トークンの生成
-        const token = crypto.randomBytes(32).toString('hex');
+        const token = crypto.randomBytes(32).toString("hex");
         query_pending_email = `
         INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
         SELECT $1, 'email', $2, $3, $4, $5
@@ -238,10 +268,17 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
             FROM pending_user_changes
             WHERE user_id = $6 AND field_name = 'email'
         );
-        `
+        `;
 
         //クエリの実行
-        const result = await client.query(query_pending_email, [profile.user_id, profile.email, token, false, expiresAt, profile.user_id]);
+        const result = await client.query(query_pending_email, [
+          profile.user_id,
+          profile.email,
+          token,
+          false,
+          expires_at_jst,
+          profile.user_id,
+        ]);
 
         //pending_user_changesに挿入できなかった場合
         if (result.rowCount === 0) {
@@ -251,18 +288,17 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
         console.log("メールアドレス変更のメール送信");
         //profile.emailがある場合(新しいメールアドレス)
         if (profile.email) {
-          await sendMail(profile.email, token,3);
+          await sendMail(profile.email, token, 3);
         } else {
           //emailがない場合
           throw new Error("emailが指定されていません");
         }
       }
     }
-    
+
     await client.query("COMMIT");
 
     return true;
-    
   } catch (error) {
     console.log(error);
     if (client) {
@@ -273,17 +309,18 @@ export const ProfileEditController = async (profile: profile_edit): Promise<bool
     } else {
       throw new Error("Error editing profile");
     }
-
   } finally {
     if (client) {
       client.release();
     }
     console.log("disconnected\n");
   }
-}
+};
 
 //ユーザ認証のためのメールを再送信する
-export const UserReSendMailController = async (id: string): Promise<mailInfo> => {
+export const UserReSendMailController = async (
+  id: string
+): Promise<mailInfo> => {
   let client;
   try {
     //データベースに接続
@@ -308,7 +345,6 @@ export const UserReSendMailController = async (id: string): Promise<mailInfo> =>
     } else {
       throw new Error("ユーザが存在しません");
     }
-
   } catch (error) {
     console.log(error);
     if (error instanceof Error) {
@@ -318,15 +354,18 @@ export const UserReSendMailController = async (id: string): Promise<mailInfo> =>
     }
   } finally {
     //データベースとの接続を切断
-    if(client) {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");
   }
-}
+};
 
 //メールアドレス変更のためのメールを再送信する
-export const ProfileReSendMailController = async (id: string, field_name: string): Promise<string> => {
+export const ProfileReSendMailController = async (
+  id: string,
+  field_name: string
+): Promise<string> => {
   let client;
   try {
     //データベースに接続
@@ -343,12 +382,18 @@ export const ProfileReSendMailController = async (id: string, field_name: string
 
     //1件なければエラーを返す
     if (result.rows.length === 0) {
-      throw new Error("認証待ちの変更はありません")
+      throw new Error("認証待ちの変更はありません");
     } else {
       //last_sent_atから5分以上経っているかどうか
       const last_sent_at = result.rows[0].last_sent_at;
       const now = new Date();
-      const diff = now.getTime() - last_sent_at.getTime();
+      //nowをJSTに変換
+      const now_jst = convertUtcToJst(now);
+
+      //now_jstをDate型に変換
+      const now_jst_date = new Date(now_jst);
+
+      const diff = now_jst_date.getTime() - last_sent_at.getTime();
       console.log(diff);
       if (diff < 300000) {
         throw new Error("再送信から5分以内は再送信できません");
@@ -357,16 +402,29 @@ export const ProfileReSendMailController = async (id: string, field_name: string
 
     // 有効期限を1日後に設定
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 1);
+    const expires_at_jst = convertUtcToJst(expiresAt);
+    //expires_at_jstをDate型に変換
+    const expires_at_jst_date = new Date(expires_at_jst);
+    //expires_at_jst_dateを1日後に設定
+    expires_at_jst_date.setDate(expires_at_jst_date.getDate() + 1);
+
     //last_sent_atを更新
     const last_sent_at = new Date();
-    last_sent_at.setDate(last_sent_at.getDate());
+    const last_sent_at_jst = convertUtcToJst(last_sent_at);
+    //last_sent_at_jstをDate型に変換
+    const last_sent_at_jst_date = new Date(last_sent_at_jst);
+    //last_sent_at_jst_dateを現在時刻に設定
+    last_sent_at_jst_date.setDate(last_sent_at_jst_date.getDate());
 
     //有効期限とlast_sent_atを更新するクエリの作成
     const query_update = createUpdatePendingUserChangesQuery();
     console.log(query_update);
     //クエリの実行
-    const result_update = await client.query(query_update, [expiresAt, last_sent_at, result.rows[0].id]);
+    const result_update = await client.query(query_update, [
+      expires_at_jst_date,
+      last_sent_at_jst_date,
+      result.rows[0].id,
+    ]);
 
     //更新できなかった場合
     if (result_update.rowCount === 0) {
@@ -385,15 +443,17 @@ export const ProfileReSendMailController = async (id: string, field_name: string
     }
   } finally {
     //データベースとの接続を切断
-    if(client) {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");
   }
-}
+};
 
 //パスワードのリセット要求があるか確認（pending_user_changesからuser_idで検索）して、なかったら作成、あったらlast_sent_atを更新
-export const PasswordResetRequestController = async (user_id: string): Promise<string> => {
+export const PasswordResetRequestController = async (
+  user_id: string
+): Promise<string> => {
   let client;
   try {
     //データベースに接続
@@ -413,12 +473,21 @@ export const PasswordResetRequestController = async (user_id: string): Promise<s
       console.log("パスワードリセット pending_user_changesに保存");
       // 有効期限を1日後に設定
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 1);
+      const expires_at_jst = convertUtcToJst(expiresAt);
+      //expires_at_jstをDate型に変換
+      const expires_at_jst_date = new Date(expires_at_jst);
+      //expires_at_jst_dateを1日後に設定
+      expires_at_jst_date.setDate(expires_at_jst_date.getDate() + 1);
+
       // トークンの生成
-      const token_ = crypto.randomBytes(32).toString('hex');
+      const token_ = crypto.randomBytes(32).toString("hex");
       //last_sent_atを更新
       const last_sent_at = new Date();
-      last_sent_at.setDate(last_sent_at.getDate());
+      const last_sent_at_jst = convertUtcToJst(last_sent_at);
+
+      //last_sent_at_jstをDate型に変換
+      const last_sent_at_jst_date = new Date(last_sent_at_jst);
+      last_sent_at_jst_date.setDate(last_sent_at_jst_date.getDate());
       //クエリの作成
       //new_valueはパスワードの時はtmpでいい レコードをトークンの保存として使うだけなので
       const query_pending_password = createInsertPasswordResetTokenQuery();
@@ -429,7 +498,10 @@ export const PasswordResetRequestController = async (user_id: string): Promise<s
 
       console.log(query_pending_password);
       //クエリの実行
-      const result_pending_password = await client.query(query_pending_password, [user_id, token_, last_sent_at, expiresAt]);
+      const result_pending_password = await client.query(
+        query_pending_password,
+        [user_id, token_, last_sent_at_jst_date, expires_at_jst_date]
+      );
 
       //挿入できなかった場合
       if (result_pending_password.rowCount === 0) {
@@ -442,7 +514,11 @@ export const PasswordResetRequestController = async (user_id: string): Promise<s
       //last_sent_atから5分以上経っているかどうか確認して、立っていなかったらエラー
       const last_sent_at_get = result.rows[0].last_sent_at;
       const now = new Date();
-      const diff = now.getTime() - last_sent_at_get.getTime();
+      //nowをJSTに変換
+      const now_jst = convertUtcToJst(now);
+      //now_jstをDate型に変換
+      const now_jst_date = new Date(now_jst);
+      const diff = now_jst_date.getTime() - last_sent_at_get.getTime();
       console.log(diff);
       if (diff < 300000) {
         throw new Error("再送信から5分以内は再送信できません");
@@ -450,12 +526,19 @@ export const PasswordResetRequestController = async (user_id: string): Promise<s
 
       //last_sent_atを更新
       const last_sent_at = new Date();
-      last_sent_at.setDate(last_sent_at.getDate());
+      const last_sent_at_jst = convertUtcToJst(last_sent_at);
+      //last_sent_at_jstをDate型に変換
+      const last_sent_at_jst_date = new Date(last_sent_at_jst);
+      last_sent_at_jst_date.setDate(last_sent_at_jst_date.get);
       //クエリの作成
       const query_update = createUpdatePendingUserChangesQuery();
       console.log(query_update);
       //クエリの実行
-      const result_update = await client.query(query_update, [result.rows[0].expires_at, last_sent_at, result.rows[0].id]);
+      const result_update = await client.query(query_update, [
+        result.rows[0].expires_at,
+        last_sent_at,
+        result.rows[0].id,
+      ]);
 
       //更新できなかった場合
       if (result_update.rowCount === 0) {
@@ -473,7 +556,6 @@ export const PasswordResetRequestController = async (user_id: string): Promise<s
     const token_sent_ = String(token_sent);
 
     return token_sent_;
-
   } catch (error) {
     console.log(error);
     if (error instanceof Error) {
@@ -483,15 +565,17 @@ export const PasswordResetRequestController = async (user_id: string): Promise<s
     }
   } finally {
     //データベースとの接続を切断
-    if(client) {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");
   }
-}
+};
 
 //ユーザの有効化
-export const UserValidationController = async (uv: user_verify): Promise<boolean> => {
+export const UserValidationController = async (
+  uv: user_verify
+): Promise<boolean> => {
   let check = false;
 
   let client;
@@ -505,24 +589,27 @@ export const UserValidationController = async (uv: user_verify): Promise<boolean
     //uv.category_idの型を調べる
     console.log(typeof uv.category_id);
 
-
     if (String(uv.category_id) === "1") {
       console.log("ユーザの有効化");
       //ユーザ情報を更新
       query = createActivateQuery();
-    } else if (String(uv.category_id) === "2" || String(uv.category_id) === "3" || String(uv.category_id) === "4") { //2または3の場合
+    } else if (
+      String(uv.category_id) === "2" ||
+      String(uv.category_id) === "3" ||
+      String(uv.category_id) === "4"
+    ) {
+      //2または3の場合
       //一旦ここは保留
-      throw new Error("送るエンドポイントが違います")
+      throw new Error("送るエンドポイントが違います");
       query = "test";
     } else {
       throw new Error("カテゴリが不正です");
     }
 
-
     const result = await client.query(query, [uv.user_id]);
     console.dir(result, { depth: null });
 
-    if(result.rowCount === 1) {
+    if (result.rowCount === 1) {
       check = true;
       return check;
     } else {
@@ -533,12 +620,12 @@ export const UserValidationController = async (uv: user_verify): Promise<boolean
     throw new Error("Error validating user");
   } finally {
     //データベースとの接続を切断
-    if(client) {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");
   }
-}
+};
 
 //プロフィール編集の有効化
 export const ProfileValidationController = async (token: string) => {
@@ -558,34 +645,40 @@ export const ProfileValidationController = async (token: string) => {
 
     console.log(result.rows[0]);
 
-    if(result.rows.length === 0) {
+    if (result.rows.length === 0) {
       throw new Error("トークンが見つかりませんでした");
     }
 
-    if(result.rows[0].expires_at < new Date()) {
+    const date = new Date();
+    //dateをJSTに変換
+    const date_jst = convertUtcToJst(date);
+    if (result.rows[0].expires_at < date_jst) {
       throw new Error("トークンの有効期限が切れています");
     }
 
-    
     const query_update = createUpdateUserQuery(result.rows[0].field_name);
     console.log(query_update);
 
-    const result_update = await client.query(query_update, [result.rows[0].new_value, result.rows[0].user_id]);
+    const result_update = await client.query(query_update, [
+      result.rows[0].new_value,
+      result.rows[0].user_id,
+    ]);
 
-    if(result_update.rowCount === 0) {
+    if (result_update.rowCount === 0) {
       throw new Error("プロフィールの変更ができませんでした");
     }
 
     //pending_user_changesから削除
     const query_pending_delete = createDeletePendingUserChangesQuery();
-    const result_delete = await client.query(query_pending_delete, [result.rows[0].id]);
+    const result_delete = await client.query(query_pending_delete, [
+      result.rows[0].id,
+    ]);
 
-    if(result_delete.rowCount === 0) {
+    if (result_delete.rowCount === 0) {
       throw new Error("トークンの削除ができませんでした");
     }
 
     await client.query("COMMIT");
-
   } catch (error) {
     console.log(error);
     if (error instanceof Error) {
@@ -599,9 +692,11 @@ export const ProfileValidationController = async (token: string) => {
     }
     console.log("disconnected\n");
   }
-}
+};
 
-export const getTokenInfoController = async (token: string):Promise<user_verify> => {
+export const getTokenInfoController = async (
+  token: string
+): Promise<user_verify> => {
   console.log("getTokenInfoController");
   let client;
   try {
@@ -616,12 +711,18 @@ export const getTokenInfoController = async (token: string):Promise<user_verify>
     if (result.rows.length === 0) {
       throw new Error("トークンが見つかりませんでした");
     } else {
-      if (result.rows[0].expires_at < new Date()) {
+      const date = new Date();
+      //dateをJSTに変換
+      const date_jst = convertUtcToJst(date);
+      if (result.rows[0].expires_at < date_jst) {
         throw new Error("トークンの有効期限が切れています");
       } else {
         console.log(result.rows[0].category_id);
         //user_verifyクラスのインスタンスを作成
-        const uv = new user_verify(result.rows[0].user_id, result.rows[0].category_id);
+        const uv = new user_verify(
+          result.rows[0].user_id,
+          result.rows[0].category_id
+        );
         return uv;
       }
     }
@@ -634,9 +735,12 @@ export const getTokenInfoController = async (token: string):Promise<user_verify>
     }
     console.log("disconnected\n");
   }
-}
+};
 
-export const UserLoginController = async (email: string, password: string): Promise<user_login> => {
+export const UserLoginController = async (
+  email: string,
+  password: string
+): Promise<user_login> => {
   //パスワードをハッシュ化
   const p = await hashPassword(password);
 
@@ -653,15 +757,21 @@ export const UserLoginController = async (email: string, password: string): Prom
     console.log(await comparePassword(password, result.rows[0].password));
     console.log(result.rows[0].is_active);
 
-    if (result.rows.length === 0) {//ユーザが見つからなかった場合
+    if (result.rows.length === 0) {
+      //ユーザが見つからなかった場合
       throw new Error("emailが登録されていません");
-    } else if (!result.rows[0].is_active) {//ユーザが認証されていない場合
+    } else if (!result.rows[0].is_active) {
+      //ユーザが認証されていない場合
       throw new Error("ユーザが認証されていません");
-    } else if(await comparePassword(password, result.rows[0].password)) { //パスワードが一致した場合
+    } else if (await comparePassword(password, result.rows[0].password)) {
+      //パスワードが一致した場合
       //result.rowsの中身の型を確認
       console.log(result.rows[0]);
 
-      const user = new user_login(result.rows[0].id, result.rows[0].category_id);
+      const user = new user_login(
+        result.rows[0].id,
+        result.rows[0].category_id
+      );
       return user;
     } else {
       throw new Error("パスワードが一致しません");
@@ -680,12 +790,12 @@ export const UserLoginController = async (email: string, password: string): Prom
     }
   } finally {
     //データベースとの接続を切断
-    if(client) {
+    if (client) {
       client.release();
     }
     console.log("disconnected\n");
   }
-}
+};
 
 export const AllUsersGetController = async () => {
   let client;
@@ -695,12 +805,12 @@ export const AllUsersGetController = async () => {
 
     const query = createGetAllUsersQuery();
     const result = await client.query(query);
-    console.log("全ユーザ取得結果")
+    console.log("全ユーザ取得結果");
     console.dir(result, { depth: null });
     // `rows` と `rowCount` のみ抽出
     const simplifiedResult = {
       rowCount: result.rowCount,
-      rows: result.rows
+      rows: result.rows,
     };
     return simplifiedResult;
   } catch (error) {
@@ -712,7 +822,7 @@ export const AllUsersGetController = async () => {
     }
     console.log("disconnected\n");
   }
-}
+};
 
 export const SearchUsersController = async (username: string) => {
   let client;
@@ -728,14 +838,14 @@ export const SearchUsersController = async (username: string) => {
 
     const simplifiedResult = {
       rowCount: result.rowCount,
-      rows: result.rows
+      rows: result.rows,
     };
     return simplifiedResult;
   } catch (err) {
     console.log(err);
     throw new Error("Error searching users");
   }
-}
+};
 
 //自分のユーザ情報を取得する
 export const MyInfoGetController = async (id: string) => {
@@ -746,7 +856,7 @@ export const MyInfoGetController = async (id: string) => {
 
     const query = createGetMyInfoQuery();
     const result = await client.query(query, [id]);
-    if(result.rows.length === 0) {
+    if (result.rows.length === 0) {
       throw new Error("ユーザが見つかりませんでした");
     } else {
       console.log(result.rows[0].user_name + "の情報");
@@ -762,5 +872,4 @@ export const MyInfoGetController = async (id: string) => {
       throw new Error("Error getting my info");
     }
   }
-
-}
+};
