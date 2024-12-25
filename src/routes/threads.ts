@@ -1,6 +1,6 @@
 import express from "express";
-import { Thread, thread_registration } from "../model/Threads";
-import { ThreadGetController, ThreadRegistrationController } from "../controllers/threadsController";
+import { getPostsRequest, Thread, thread_registration } from "../model/Threads";
+import { GetPostsByThreadIdController, ThreadCategoryGetController, ThreadGetController, ThreadRegistrationController } from "../controllers/threadsController";
 import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { user_login } from "../model/User";
 
@@ -120,6 +120,68 @@ router.post("/", async(req, res) => {
   }
   
 
+
+});
+
+
+//スレッドの中の投稿を取得
+//limitは
+//GET /threads/123/posts?limit=5&offset=10
+//例1 limit=5 offset=10 な11件目から15件目までの投稿を取得
+//例2 limit=5 offset=0 な1件目から5件目までの投稿を取得
+router.get("/:thread_id/posts", async(req, res) => {
+  //クッキーからトークンを取得
+  const token = req.cookies.bulletin_token;
+  //なければエラーを返す
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return
+  }
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  //情報をGetPostsRequestに代入
+  //limitとoffsetがない場合はデフォルト値を代入
+  const req_params: getPostsRequest = {
+    thread_id: req.params.thread_id,
+    limit: req.query.limit === undefined ? 5 : Number(req.query.limit),
+    offset: req.query.offset === undefined ? 0 : Number(req.query.offset)
+  }
+
+  try {
+    const thread_info = await ThreadCategoryGetController(Number(req_params.thread_id));
+
+    //payload.category_idが5（管理者）でない,かつpayload.category_idがcategory_idと一致しない場合はエラーを返す
+    if (payload.category_id !== "5" && Number(payload.category_id) !== thread_info.category_id) {
+      res.status(400).send("権限がありません");
+      return;
+    }
+
+    const posts = await GetPostsByThreadIdController(req_params);
+    
+    posts.thread_title = thread_info.title;
+    posts.thread_description = thread_info.description;
+    
+    res.status(200).send(posts);
+
+  } catch (err) {
+    if (err instanceof Error) {
+      res.status(400).send(err.message);
+    } else {
+      res.status(400).send("なんらかのエラーが発生" + err);
+    }
+  }
 
 });
 
