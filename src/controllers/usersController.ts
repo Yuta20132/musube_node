@@ -1,5 +1,5 @@
 import { create } from "domain";
-import { createActivateQuery, createDeletePendingUserChangesQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery, createUpdateUserQuery, createGetChangesByUserIdQuery, createUpdatePendingUserChangesQuery } from "../components/createQuery";
+import { createActivateQuery, createDeletePendingUserChangesQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery, createUpdateUserQuery, createGetChangesByUserIdQuery, createUpdatePendingUserChangesQuery, createInsertPasswordResetTokenQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
@@ -376,6 +376,104 @@ export const ProfileReSendMailController = async (id: string, field_name: string
     //result.rows[0].tokenをstring型に変換
     const token = String(result.rows[0].token);
     return token;
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("なんらかのエラーが発生");
+    }
+  } finally {
+    //データベースとの接続を切断
+    if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+//パスワードのリセット要求があるか確認（pending_user_changesからuser_idで検索）して、なかったら作成、あったらlast_sent_atを更新
+export const PasswordResetRequestController = async (user_id: string): Promise<string> => {
+  let client;
+  try {
+    //データベースに接続
+    client = await pool.connect();
+    //トランザクション開始
+    await client.query("BEGIN");
+    console.log("connected");
+
+    //すでに要求が存在するか検索
+    const query = createGetChangesByUserIdQuery("password");
+    console.log(query);
+
+    const result = await client.query(query, [user_id]);
+
+    let token_sent;
+    if (result.rowCount === 0) {
+      console.log("パスワードリセット pending_user_changesに保存");
+      // 有効期限を1日後に設定
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 1);
+      // トークンの生成
+      const token_ = crypto.randomBytes(32).toString('hex');
+      //last_sent_atを更新
+      const last_sent_at = new Date();
+      last_sent_at.setDate(last_sent_at.getDate());
+      //クエリの作成
+      //new_valueはパスワードの時はtmpでいい レコードをトークンの保存として使うだけなので
+      const query_pending_password = createInsertPasswordResetTokenQuery();
+      console.log(`user_id: ${user_id}`);
+      console.log(`token: ${token_}`);
+      console.log(`expiresAt: ${expiresAt}`);
+      console.log(`last_sent_at: ${last_sent_at}`);
+
+      console.log(query_pending_password);
+      //クエリの実行
+      const result_pending_password = await client.query(query_pending_password, [user_id, token_, last_sent_at, expiresAt]);
+
+      //挿入できなかった場合
+      if (result_pending_password.rowCount === 0) {
+        throw new Error("情報の挿入に失敗しました");
+      } else {
+        console.log("パスワードリセットのメール送信");
+        token_sent = token_;
+      }
+    } else {
+      //last_sent_atから5分以上経っているかどうか確認して、立っていなかったらエラー
+      const last_sent_at_get = result.rows[0].last_sent_at;
+      const now = new Date();
+      const diff = now.getTime() - last_sent_at_get.getTime();
+      console.log(diff);
+      if (diff < 300000) {
+        throw new Error("再送信から5分以内は再送信できません");
+      }
+
+      //last_sent_atを更新
+      const last_sent_at = new Date();
+      last_sent_at.setDate(last_sent_at.getDate());
+      //クエリの作成
+      const query_update = createUpdatePendingUserChangesQuery();
+      console.log(query_update);
+      //クエリの実行
+      const result_update = await client.query(query_update, [result.rows[0].expires_at, last_sent_at, result.rows[0].id]);
+
+      //更新できなかった場合
+      if (result_update.rowCount === 0) {
+        throw new Error("情報の更新に失敗しました");
+      } else {
+        console.log("パスワードリセットのメール再送信");
+        token_sent = result.rows[0].token;
+      }
+    }
+
+    //commit
+    await client.query("COMMIT");
+
+    //result.rows[0].tokenをstring型に変換
+    const token_sent_ = String(token_sent);
+
+    return token_sent_;
+
   } catch (error) {
     console.log(error);
     if (error instanceof Error) {
