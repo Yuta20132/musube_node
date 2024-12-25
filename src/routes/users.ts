@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, getTokenInfoController, MyInfoGetController, ProfileEditController, ProfileValidationController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, getTokenInfoController, MyInfoGetController, ProfileEditController, ProfileReSendMailController, ProfileValidationController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { profile } from "console";
 
@@ -294,7 +294,7 @@ router.put("/", async(req, res) => {
 
 
 //登録確認メールの再送信
-router.get("/register_resend", async(req, res) => {
+router.get("/register-resend", async(req, res) => {
 
   //トークンがあるか確認
   const token = req.cookies.bulletin_token;
@@ -355,10 +355,88 @@ router.get("/register_resend", async(req, res) => {
 
 //プロフィール編集の際のメールの再送信
 //未実装
-router.post("/profile_resend", async(req, res) => {
- 
+router.get("/email-resend", async(req, res) => {
+  //とーくんがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  console.log(`メールアドレス変更の確認メール再送信:${payload.user_id}`);
+
+  try {
+    const token = await ProfileReSendMailController(payload.user_id, 'email');
+
+    //メール送信
+    await sendMail(payload.email, token, 3);
+
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("メールを再送信しました");
+    
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      console.log(error.message);
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
+    }
+  }
 })
 
+router.get("/category-resend", async(req, res) => {
+  //トークンの確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  console.log(`メールアドレス変更の確認メール再送信:${payload.user_id}`);
+
+  try {
+    const token = await ProfileReSendMailController(payload.user_id, 'category_id');
+
+    //メール送信
+    await sendMail(payload.email, token, 2);
+
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("メールを再送信しました");
+    
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      console.log(error.message);
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
+    }
+  }
+
+})
 
 //http://localhost:8080/users/verify
 //メール認証
