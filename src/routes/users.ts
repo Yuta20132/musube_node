@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, getTokenInfoController, MyInfoGetController, ProfileEditController, ProfileReSendMailController, ProfileValidationController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, getTokenInfoController, MyInfoGetController, PasswordResetRequestController, ProfileEditController, ProfileReSendMailController, ProfileValidationController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { profile } from "console";
 
@@ -292,6 +292,51 @@ router.put("/", async(req, res) => {
 
 });
 
+//パスワードのリセット
+//emailやcategory_idのようにトークンを発行してメールを送信する
+router.get("/reset-password", async(req, res) => {
+  //tokenがあるか確認
+  const token = req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  console.log(`パスワードリセット:${payload.user_id}`);
+
+  try {
+    const token = await PasswordResetRequestController(payload.user_id);
+    //トークンがあれば、payload.emailにメールを送信
+    if(token) {
+      await sendMail(payload.email, token, 4);
+    } else {
+      res.status(400).send("トークンの生成に失敗しました");
+    }
+
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("メールを送信しました");
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      console.log(error.message);
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
+    }
+  }
+});
+
 
 
 //登録確認メールの再送信
@@ -395,7 +440,7 @@ router.get("/email-resend", async(req, res) => {
       res.status(400).send(error);
     }
   }
-})
+});
 
 router.get("/category-resend", async(req, res) => {
   //トークンの確認
@@ -437,7 +482,7 @@ router.get("/category-resend", async(req, res) => {
     }
   }
 
-})
+});
 
 //http://localhost:8080/users/verify
 //メール認証
