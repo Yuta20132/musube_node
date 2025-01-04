@@ -1,11 +1,12 @@
 import { create } from "domain";
-import { createActivateQuery, createDeletePendingUserChangesQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery, createUpdateUserQuery } from "../components/createQuery";
+import { createActivateQuery, createDeletePendingUserChangesQuery, createGetAllUsersQuery, createGetMyInfoQuery, createGetPendingUserChangesQuery, createGetTokenCategoryQuery, createGetUserByEmailQuery, createLoginInfoQuery, createLoginQuery, createRegistrationQuery, createSearchUserQuery, createUpdateUserQuery, createGetChangesByUserIdQuery, createUpdatePendingUserChangesQuery } from "../components/createQuery";
 import { comparePassword, hashPassword } from "../components/hashUtils";
 import pool from "../db/client";
 import { mailInfo, user_login, user_registration } from "../model/User";
 import { v4 as uuidv4 } from "uuid";
 import crypto from 'crypto';
 import { sendMail } from "../components/sendMail";
+import { TokenExpiredError } from "jsonwebtoken";
 
 //getTokenInfoControllerで取得したcategory_idとuser_idを返却するためのクラス
 export class user_verify {
@@ -308,6 +309,73 @@ export const UserReSendMailController = async (id: string): Promise<mailInfo> =>
       throw new Error("ユーザが存在しません");
     }
 
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("なんらかのエラーが発生");
+    }
+  } finally {
+    //データベースとの接続を切断
+    if(client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+//メールアドレス変更のためのメールを再送信する
+export const ProfileReSendMailController = async (id: string, field_name: string): Promise<string> => {
+  let client;
+  try {
+    //データベースに接続
+    client = await pool.connect();
+    //トランザクション開始
+    await client.query("BEGIN");
+    console.log("connected");
+
+    //ユーザー情報を更新
+    const query = createGetChangesByUserIdQuery(field_name);
+    console.log(query);
+
+    const result = await client.query(query, [id]);
+
+    //1件なければエラーを返す
+    if (result.rows.length === 0) {
+      throw new Error("認証待ちの変更はありません")
+    } else {
+      //last_sent_atから5分以上経っているかどうか
+      const last_sent_at = result.rows[0].last_sent_at;
+      const now = new Date();
+      const diff = now.getTime() - last_sent_at.getTime();
+      console.log(diff);
+      if (diff < 300000) {
+        throw new Error("再送信から5分以内は再送信できません");
+      }
+    }
+
+    // 有効期限を1日後に設定
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 1);
+    //last_sent_atを更新
+    const last_sent_at = new Date();
+    last_sent_at.setDate(last_sent_at.getDate());
+
+    //有効期限とlast_sent_atを更新するクエリの作成
+    const query_update = createUpdatePendingUserChangesQuery();
+    console.log(query_update);
+    //クエリの実行
+    const result_update = await client.query(query_update, [expiresAt, last_sent_at, result.rows[0].id]);
+
+    //更新できなかった場合
+    if (result_update.rowCount === 0) {
+      throw new Error("情報の更新に失敗しました");
+    }
+
+    //result.rows[0].tokenをstring型に変換
+    const token = String(result.rows[0].token);
+    return token;
   } catch (error) {
     console.log(error);
     if (error instanceof Error) {
