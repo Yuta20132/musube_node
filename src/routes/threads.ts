@@ -181,6 +181,12 @@ router.get("/:thread_id/posts", async(req, res) => {
     res.status(400).send("limitが不正な値です");
     return;
   }
+
+  //offsetが0以下の場合はエラーを返す
+  if (req.query.offset !== undefined && Number(req.query.offset) < 0) {
+    res.status(400).send("offsetが不正な値です");
+    return;
+  }
   
   const req_params: getPostsRequest = {
     thread_id: req.params.thread_id,

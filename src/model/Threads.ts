@@ -45,6 +45,8 @@ export type getPostsResponse = {
   thread_title: string;
   thread_description: string;
   rowCounts: number;
+  offset: number;
+  limit: number;
   rows?: {
     post_id: string;
     post_content: string;

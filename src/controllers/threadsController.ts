@@ -117,9 +117,11 @@ export const GetPostsByThreadIdController = async(req_params:getPostsRequest): P
 
     const posts:getPostsResponse = {
       thread_id: req_params.thread_id,
-      thread_title: result.rows[0].thread_title,
-      thread_description: result.rows[0].thread_description,
+      thread_title: result.rowCount === 0 ? "" : result.rows[0].thread_title,
+      thread_description: result.rowCount === 0 ? "" : result.rows[0].thread_description,
       rowCounts: result.rowCount === 0 ? 0 : result.rows[0].rowcounts,//0の場合もあるから注意
+      offset: req_params.offset ? req_params.offset : 0,
+      limit: req_params.limit ? req_params.limit : 5,
       rows: result.rows,
     };
     
