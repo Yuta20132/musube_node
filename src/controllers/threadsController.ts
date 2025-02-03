@@ -103,20 +103,23 @@ export const GetPostsByThreadIdController = async(req_params:getPostsRequest): P
     console.log("ポストを取得するクエリ\n");
     console.log(query);
 
+    console.log(req_params);
+
     const result = await client.query(query, [req_params.thread_id, req_params.limit, req_params.offset]);
     console.log("ポストを取得");
     console.log(result.rows);
 
     //result.rowCountsがない場合はエラーを返す
-    if (result.rowCount === 0) {
-      throw new Error("rowCountが存在しません");
-    }
+    //0の場合もあるから注意
+    // if (result.rowCount === 0) {
+    //   throw new Error("ポストが存在しません");
+    // }
 
     const posts:getPostsResponse = {
       thread_id: req_params.thread_id,
       thread_title: result.rows[0].thread_title,
       thread_description: result.rows[0].thread_description,
-      rowCounts: Number(result.rowCount),
+      rowCounts: result.rowCount === 0 ? 0 : result.rows[0].rowcounts,//0の場合もあるから注意
       rows: result.rows,
     };
     

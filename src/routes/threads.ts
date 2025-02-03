@@ -176,6 +176,12 @@ router.get("/:thread_id/posts", async(req, res) => {
 
   //情報をGetPostsRequestに代入
   //limitとoffsetがない場合はデフォルト値を代入
+  //limitが0以下の場合はエラーを返す
+  if (req.query.limit !== undefined && Number(req.query.limit) <= 0) {
+    res.status(400).send("limitが不正な値です");
+    return;
+  }
+  
   const req_params: getPostsRequest = {
     thread_id: req.params.thread_id,
     limit: req.query.limit === undefined ? 5 : Number(req.query.limit),
