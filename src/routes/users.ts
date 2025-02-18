@@ -400,7 +400,6 @@ router.get("/register-resend", async(req, res) => {
 });
 
 //プロフィール編集の際のメールの再送信
-//未実装
 router.get("/email-resend", async(req, res) => {
   //とーくんがあるか確認
   const token = req.cookies.bulletin_token;

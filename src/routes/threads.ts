@@ -76,11 +76,30 @@ router.get("/:category_id", async(req, res) => {
 //スレッドのタイトルと内容、カテゴリIDを受け取る
 router.post("/", async(req, res) => {
   //cookieからsession_idを取得
-  const session_id = await req.cookies.session_id;
-  console.log(session_id);
+  const token = await req.cookies.bulletin_token;
+  console.log("token", token);
   //なければエラーを返す
-  if (session_id === undefined) {
+  if (token === undefined) {
     res.status(400).send("セッションがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  //情報が取得できない場合はエラーを返す
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  //payload.caegory_idが5（管理者）でない,かつpayload.category_idがcategory_idと一致しない場合はエラーを返す
+  if (payload.category_id !== "5" && Number(payload.category_id) !== Number(req.body.category_id)) {
+    res.status(400).send("権限がありません");
     return;
   }
 
@@ -96,6 +115,10 @@ router.post("/", async(req, res) => {
     description = "";
   }
 
+  console.log("title: ", title);
+  console.log("description: ", description);
+  console.log("category_id: ", category_id);
+
   const thread: thread_registration = {
     title: title,
     description: description,
@@ -103,8 +126,8 @@ router.post("/", async(req, res) => {
   }
 
   try {
-    //controllerにスレッド情報とセッションIDを渡す
-    const is_success = await ThreadRegistrationController(session_id, thread);
+    //controllerにスレッド情報とクッキーを渡す
+    const is_success = await ThreadRegistrationController(thread);
     //成功した場合はステータスコード200を返す
     if (is_success) {
       res.status(200).send("スレッドの作成に成功しました");
@@ -153,6 +176,18 @@ router.get("/:thread_id/posts", async(req, res) => {
 
   //情報をGetPostsRequestに代入
   //limitとoffsetがない場合はデフォルト値を代入
+  //limitが0以下の場合はエラーを返す
+  if (req.query.limit !== undefined && Number(req.query.limit) <= 0) {
+    res.status(400).send("limitが不正な値です");
+    return;
+  }
+
+  //offsetが0以下の場合はエラーを返す
+  if (req.query.offset !== undefined && Number(req.query.offset) < 0) {
+    res.status(400).send("offsetが不正な値です");
+    return;
+  }
+  
   const req_params: getPostsRequest = {
     thread_id: req.params.thread_id,
     limit: req.query.limit === undefined ? 5 : Number(req.query.limit),

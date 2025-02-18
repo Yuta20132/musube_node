@@ -529,7 +529,7 @@ export const PasswordResetRequestController = async (
       const last_sent_at_jst = convertUtcToJst(last_sent_at);
       //last_sent_at_jstをDate型に変換
       const last_sent_at_jst_date = new Date(last_sent_at_jst);
-      last_sent_at_jst_date.setDate(last_sent_at_jst_date.get);
+      last_sent_at_jst_date.setDate(last_sent_at_jst_date.getDate());
       //クエリの作成
       const query_update = createUpdatePendingUserChangesQuery();
       console.log(query_update);

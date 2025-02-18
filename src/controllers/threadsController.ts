@@ -6,7 +6,7 @@ import { user_login } from "../model/User";
 
 
 
-export const ThreadRegistrationController = async(session_id: string, thread: thread_registration):Promise<boolean> => {
+export const ThreadRegistrationController = async(thread: thread_registration):Promise<boolean> => {
   
 
   let is_success = false;
@@ -16,29 +16,26 @@ export const ThreadRegistrationController = async(session_id: string, thread: th
     client = await pool.connect();
     console.log("connected");
 
-
-    //セッションIDからユーザのカテゴリを取得し、thread.category_idと比較する
-    //権限を持たない場合（例：一般ユーザなのに大学研究所のスレッドを作成しようとしている場合など）はエラーを返す
-    const query_session:string = createGetCategoryQuery(session_id);
-    console.log("sessionからカテゴリを取得するクエリ\n");
-    console.log(query_session);
-    const result_session = await client.query(query_session);
-
-    console.log("sessionから取得したカテゴリ\n");
-    console.log(result_session.rows[0].category_id);
-
-    if (result_session.rows[0].category_id !== thread.category_id) {
-      console.log("権限が一致しないため、スレッドの作成に失敗しました")
-      throw new Error("権限がありません");
-    }
-
+    //トランザクション開始
+    await client.query("BEGIN");
 
     const query_createThread = createThreadQuery(thread);
     console.log("スレッドを作成するクエリ\n");
     console.log(query_createThread);
     const result = await client.query(query_createThread);
 
+    //もしresult.rowCountが0だったらエラーを返す
+    if (result.rowCount === 0) {
+      console.log(result.rowCount);
+      console.log("スレッドの作成に失敗");
+      throw new Error("スレッドの作成に失敗しました");
+    } else {
+      console.log("スレッドの作成に成功");
+      console.log(result.rowCount);
+    }
 
+    //コミット
+    await client.query("COMMIT");
 
     is_success = true;
   } catch (err) {
@@ -106,20 +103,25 @@ export const GetPostsByThreadIdController = async(req_params:getPostsRequest): P
     console.log("ポストを取得するクエリ\n");
     console.log(query);
 
+    console.log(req_params);
+
     const result = await client.query(query, [req_params.thread_id, req_params.limit, req_params.offset]);
     console.log("ポストを取得");
     console.log(result.rows);
 
     //result.rowCountsがない場合はエラーを返す
-    if (result.rowCount === 0) {
-      throw new Error("rowCountが存在しません");
-    }
+    //0の場合もあるから注意
+    // if (result.rowCount === 0) {
+    //   throw new Error("ポストが存在しません");
+    // }
 
     const posts:getPostsResponse = {
       thread_id: req_params.thread_id,
-      thread_title: result.rows[0].thread_title,
-      thread_description: result.rows[0].thread_description,
-      rowCounts: Number(result.rowCount),
+      thread_title: result.rowCount === 0 ? "" : result.rows[0].thread_title,
+      thread_description: result.rowCount === 0 ? "" : result.rows[0].thread_description,
+      rowCounts: result.rowCount === 0 ? 0 : result.rows[0].rowcounts,//0の場合もあるから注意
+      offset: req_params.offset ? req_params.offset : 0,
+      limit: req_params.limit ? req_params.limit : 5,
       rows: result.rows,
     };
     
