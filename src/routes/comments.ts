@@ -39,7 +39,7 @@ router.post("/", async (req, res) => {
   }
 
   //payloadにあるユーザのcategory_idと受け取った投稿のcategory_idが一致しないまたはpayloadのcategory_idが5（管理者）でない場合はエラーを返す
-  if (payload.category_id !== category_id && payload.category_id !== "5") {
+  if (Number(payload.category_id) !== Number(category_id) && Number(payload.category_id) !== 5) {
     res.status(400).send("権限がありません");
     return;
   }

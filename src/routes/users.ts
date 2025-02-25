@@ -159,13 +159,13 @@ router.post("/register", async(req, res) => {
   const { name, first_name, last_name, category_id, institution, email, password } = req.body;
 
   //category_idが5のユーザー（管理者）は、APIからの登録はできないようにする
-  if(category_id === 5) {
+  if(Number(category_id) === 5) {
     res.status(400).send("管理者ユーザを登録することはできません");
     return;
   }
   
   //category_idが大学研究所(2)の場合、emailの下5桁がac.jpであるか確認
-  if(category_id === 2 && email.slice(-5) !== "ac.jp") {
+  if(Number(category_id) === 2 && email.slice(-5) !== "ac.jp") {
     res.status(400).send("無効なメールアドレスです");
     return;
   }

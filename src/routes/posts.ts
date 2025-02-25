@@ -56,7 +56,7 @@ router.post("/", async (req, res) => {
   
 
   //payloadにあるユーザのcategory_idと受け取った投稿のcategory_idが一致する、またはpayloadのcategory_idが5（管理者）じゃない場合はエラーを返す
-  if (payload.category_id !== category_id && payload.category_id !== "5") {
+  if (Number(payload.category_id) !== Number(category_id) && Number(payload.category_id) !== 5) {
     res.status(400).send("権限がありません");
     return;
   }
@@ -135,7 +135,7 @@ router.delete("/", async (req, res) => {
   const payload_user_id = payload.user_id;
 
   //一応ここでエラー起きるようにしてるけど、フロント側で自分の投稿じゃないものを消せないようにしてるから起きないと思う
-  if (payload_user_id !== user_id) {
+  if (Number(payload_user_id) !== Number(user_id)) {
     res.status(400).send("権限がありません");
     return;
   }
@@ -174,7 +174,7 @@ router.get("/:post_id/comments", async (req, res) => {
     return;
   }
   //ポストIDを取得
-  const post_id = req.params.post_id;
+  const post_id = Number(req.params.post_id);
   //ポストIDがない場合はエラーを返す
   if (post_id === undefined) {
     res.status(400).send("ポストIDがありません");
@@ -192,7 +192,7 @@ router.get("/:post_id/comments", async (req, res) => {
     const post_info = await PostGetController(Number(post_id));
 
     //payload.category_idが5（管理者）でない場合、かつ、ポストのカテゴリIDとpayload.category_idが一致しない場合かつ、post_info.category_idが1（全体）でない場合はエラーを返す
-    if (payload.category_id !== "5" && post_info.category_id !== Number(payload.category_id) && post_info.category_id !== 1) {
+    if (Number(payload.category_id) !== 5 && post_info.category_id !== Number(payload.category_id) && post_info.category_id !== 1) {
       res.status(400).send("権限がありません");
       return;
     }
