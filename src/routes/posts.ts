@@ -135,7 +135,7 @@ router.delete("/", async (req, res) => {
   const payload_user_id = payload.user_id;
 
   //一応ここでエラー起きるようにしてるけど、フロント側で自分の投稿じゃないものを消せないようにしてるから起きないと思う
-  if (Number(payload_user_id) !== Number(user_id) || Number(payload_id) !== 5) {
+  if (Number(payload_user_id) !== Number(user_id) || Number(payload.category_id) !== 5) {
     res.status(400).send("権限がありません");
     return;
   }

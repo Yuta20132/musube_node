@@ -451,9 +451,7 @@ export const ProfileReSendMailController = async (
 };
 
 //パスワードのリセット要求があるか確認（pending_user_changesからuser_idで検索）して、なかったら作成、あったらlast_sent_atを更新
-export const PasswordResetRequestController = async (
-  user_id: string
-): Promise<string> => {
+export const PasswordResetRequestController = async (email: string): Promise<string> => {
   let client;
   try {
     //データベースに接続
@@ -462,11 +460,21 @@ export const PasswordResetRequestController = async (
     await client.query("BEGIN");
     console.log("connected");
 
+    //ユーザのemailからユーザ情報を取得
+    //ユーザ情報がなければエラーを返す
+    const query_user = createGetUserByEmailQuery();
+    console.log(query_user);
+    const result_user = await client.query(query_user, [email]);
+    console.log(result_user);
+    if (result_user.rows.length === 0) {
+      throw new Error("ユーザが存在しません");
+    }
+
     //すでに要求が存在するか検索
     const query = createGetChangesByUserIdQuery("password");
     console.log(query);
 
-    const result = await client.query(query, [user_id]);
+    const result = await client.query(query, [result_user.rows[0].id]);
 
     let token_sent;
     if (result.rowCount === 0) {
@@ -491,7 +499,7 @@ export const PasswordResetRequestController = async (
       //クエリの作成
       //new_valueはパスワードの時はtmpでいい レコードをトークンの保存として使うだけなので
       const query_pending_password = createInsertPasswordResetTokenQuery();
-      console.log(`user_id: ${user_id}`);
+      console.log(`user_id: ${result_user.rows[0].id}`);
       console.log(`token: ${token_}`);
       console.log(`expiresAt: ${expiresAt}`);
       console.log(`last_sent_at: ${last_sent_at}`);
@@ -500,7 +508,7 @@ export const PasswordResetRequestController = async (
       //クエリの実行
       const result_pending_password = await client.query(
         query_pending_password,
-        [user_id, token_, last_sent_at_jst_date, expires_at_jst_date]
+        [result_user.rows[0].id, token_, last_sent_at_jst_date, expires_at_jst_date]
       );
 
       //挿入できなかった場合
