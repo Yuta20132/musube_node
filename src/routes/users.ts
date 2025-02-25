@@ -160,13 +160,13 @@ router.post("/register", async(req, res) => {
   const { name, first_name, last_name, category_id, institution, email, password } = req.body;
 
   //category_idが5のユーザー（管理者）は、APIからの登録はできないようにする
-  if(category_id === 5) {
+  if(Number(category_id) === 5) {
     res.status(400).send("管理者ユーザを登録することはできません");
     return;
   }
   
   //category_idが大学研究所(2)の場合、emailの下5桁がac.jpであるか確認
-  if(category_id === 2 && email.slice(-5) !== "ac.jp") {
+  if(Number(category_id) === 2 && email.slice(-5) !== "ac.jp") {
     res.status(400).send("無効なメールアドレスです");
     return;
   }
@@ -293,33 +293,41 @@ router.put("/", async(req, res) => {
 });
 
 //パスワードのリセット
+//リクエストボディにemailがある場合、そのemailに対してパスワードリセットのメールを送信する
 //emailやcategory_idのようにトークンを発行してメールを送信する
 router.get("/reset-password", async(req, res) => {
   //tokenがあるか確認
-  const token = req.cookies.bulletin_token;
-  if (token === undefined) {
-    res.status(400).send("トークンがありません");
-    return;
-  }
-  //トークンの検証
-  if (!verifyJWT(token)) {
-    res.status(400).send("トークンが無効です");
-    return;
-  }
-  //トークンから情報を取得
-  const payload = getPayloadFromJWT(token);
-  if (payload === null) {
-    res.status(400).send("トークンの解析に失敗しました");
-    return;
-  }
+  // const token = req.cookies.bulletin_token;
+  // if (token === undefined) {
+  //   res.status(400).send("トークンがありません");
+  //   return;
+  // }
+  // //トークンの検証
+  // if (!verifyJWT(token)) {
+  //   res.status(400).send("トークンが無効です");
+  //   return;
+  // }
+  // //トークンから情報を取得
+  // const payload = getPayloadFromJWT(token);
+  // if (payload === null) {
+  //   res.status(400).send("トークンの解析に失敗しました");
+  //   return;
+  // }
 
-  console.log(`パスワードリセット:${payload.user_id}`);
+  // console.log(`パスワードリセット:${payload.user_id}`);
+
+  //emailがない場合はエラーを返す
+  if(!req.body.email) {
+    res.status(400).send("emailがありません");
+    return;
+  }
+  const email = String(req.body.email);
 
   try {
-    const token = await PasswordResetRequestController(payload.user_id);
+    const token = await PasswordResetRequestController(email);
     //トークンがあれば、payload.emailにメールを送信
     if(token) {
-      await sendMail(payload.email, token, 4);
+      await sendMail(email, token, 4);
     } else {
       res.status(400).send("トークンの生成に失敗しました");
     }

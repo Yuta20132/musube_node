@@ -7,6 +7,9 @@ export const CommentCreateController = async (post_id: number, user_id: string, 
   try {
     client = await pool.connect();
 
+    //分けてるの気にしなくていい
+    //なんなら分けなくていい
+
     console.log("コメントを投稿するクエリの作成");
     if(category_id === 5) {
       const query = createAdminCommentQuery();
@@ -22,7 +25,7 @@ export const CommentCreateController = async (post_id: number, user_id: string, 
       }
     } else {
       const query = createCommentQuery();
-      const result = await client.query(query, [post_id, category_id, user_id, content]);
+      const result = await client.query(query, [post_id, user_id, content]);
       
       if (result.rowCount === 0) {
         console.log(result.rowCount);

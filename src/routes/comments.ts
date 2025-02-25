@@ -38,11 +38,12 @@ router.post("/", async (req, res) => {
     return;
   }
 
-  //payloadにあるユーザのcategory_idと受け取った投稿のcategory_idが一致しない場合エラーを返す
-  if (payload.category_id !== category_id) {
+  //payloadにあるユーザのcategory_idと受け取った投稿のcategory_idが一致しないまたはpayloadのcategory_idが5（管理者）でない場合はエラーを返す
+  if (Number(payload.category_id) !== Number(category_id) && Number(payload.category_id) !== 5) {
     res.status(400).send("権限がありません");
     return;
   }
+  
 
   //thread_idを数値に変換できるか確認
   if (isNaN(Number(post_id))) {
@@ -58,6 +59,7 @@ router.post("/", async (req, res) => {
 
   try {
     //コメントの作成
+    //category_idは投稿のカテゴリID
     await CommentCreateController(Number(post_id), payload.user_id, content, Number(category_id));
     res.status(200).send("コメントの作成に成功しました");
   } catch (err) {

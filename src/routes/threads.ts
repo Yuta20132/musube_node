@@ -54,7 +54,7 @@ router.get("/:category_id", async(req, res) => {
     }
 
     //カテゴリIDが一致せず、かつカテゴリIDが5（管理者）でない場合、またはカテゴリIDが1（全体）でない場合はエラーを返す
-    if(req_category_id !== user.category_id  && user.category_id !== "5" && req_category_id !== "1") {
+    if(Number(req_category_id) !== Number(user.category_id)  && Number(user.category_id) !== 5 && Number(req_category_id) !== 1) {
       res.status(400).send("権限がありません");
       return;
     }
@@ -98,7 +98,7 @@ router.post("/", async(req, res) => {
   }
 
   //payload.caegory_idが5（管理者）でない,かつpayload.category_idがcategory_idと一致しない場合はエラーを返す
-  if (payload.category_id !== "5" && Number(payload.category_id) !== Number(req.body.category_id)) {
+  if (Number(payload.category_id) !== 5 && Number(payload.category_id) !== Number(req.body.category_id)) {
     res.status(400).send("権限がありません");
     return;
   }
@@ -198,7 +198,7 @@ router.get("/:thread_id/posts", async(req, res) => {
     const thread_info = await ThreadCategoryGetController(Number(req_params.thread_id));
 
     //payload.category_idが5（管理者）でない,かつpayload.category_idがcategory_idと一致しない場合はエラーを返す
-    if (payload.category_id !== "5" && Number(payload.category_id) !== thread_info.category_id) {
+    if (Number(payload.category_id) !== 5 && Number(payload.category_id) !== thread_info.category_id) {
       res.status(400).send("権限がありません");
       return;
     }
