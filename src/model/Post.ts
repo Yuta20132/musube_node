@@ -37,6 +37,7 @@ export type getCommentsResponse = {
   post_title: string;
   post_content: string;
   post_userId: string;
+  created_at: Date;
   rowCounts: number;
   rows?: {
     comment_id: string;
@@ -52,4 +53,5 @@ export type post_info = {
   content: string;
   category_id: Number;
   user_id: string;
+  created_at: Date;
 }
