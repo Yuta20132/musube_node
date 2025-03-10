@@ -295,7 +295,7 @@ router.put("/", async(req, res) => {
 //パスワードのリセット
 //リクエストボディにemailがある場合、そのemailに対してパスワードリセットのメールを送信する
 //emailやcategory_idのようにトークンを発行してメールを送信する
-router.get("/reset-password", async(req, res) => {
+router.post("/reset-password", async(req, res) => {
   //tokenがあるか確認
   // const token = req.cookies.bulletin_token;
   // if (token === undefined) {
