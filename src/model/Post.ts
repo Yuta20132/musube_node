@@ -36,6 +36,7 @@ export type getCommentsResponse = {
   post_id: Number;
   post_title: string;
   post_content: string;
+  post_userId: string;
   rowCounts: number;
   rows?: {
     comment_id: string;
