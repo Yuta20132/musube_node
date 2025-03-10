@@ -51,4 +51,5 @@ export type post_info = {
   title: string;
   content: string;
   category_id: Number;
+  user_id: string;
 }
