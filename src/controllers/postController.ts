@@ -108,7 +108,9 @@ export const PostGetController = async (post_id: Number): Promise<post_info> => 
     const post_info: post_info = {
       title: result.rows[0].title,
       content: result.rows[0].content,
-      category_id: result.rows[0].category_id
+      category_id: result.rows[0].category_id,
+      user_id: result.rows[0].user_id,
+      created_at: result.rows[0].created_at
     }
 
     return post_info;
@@ -147,6 +149,8 @@ export const CommentGetByPostIdController = async (p_req: getCommentsRequest): P
       post_id: p_req.post_id,
       post_content: "tmp",
       post_title: "tmp",
+      post_userId: "tmp",
+      created_at: new Date(),
       rowCounts: result.rowCount,
       rows: result.rows
     }

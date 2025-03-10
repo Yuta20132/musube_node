@@ -207,6 +207,10 @@ router.get("/:post_id/comments", async (req, res) => {
     //
     comments.post_content = post_info.content;
     comments.post_title = post_info.title;
+    comments.post_userId = post_info.user_id;
+    comments.created_at = post_info.created_at;
+    
+
 
     res.status(200).send(comments);
 
