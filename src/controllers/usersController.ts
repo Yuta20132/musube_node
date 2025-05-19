@@ -879,5 +879,10 @@ export const MyInfoGetController = async (id: string) => {
     } else {
       throw new Error("Error getting my info");
     }
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
   }
 };
