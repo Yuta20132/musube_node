@@ -17,7 +17,8 @@ const WS_PORT = 8080;
 const corsOptions = {
   origin: '*', // 許可するオリジン
   methods: 'GET,POST,PUT,DELETE', // 許可するHTTPメソッド
-  allowedHeaders: 'Content-Type,Authorization' // 許可するヘッダー
+  allowedHeaders: 'Content-Type,Authorization', // 許可するヘッダー
+  credentials: true, // クッキーを使用する場合はtrueに設定
 };
 
 app.use(cors(corsOptions));
