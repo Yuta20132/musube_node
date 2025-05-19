@@ -198,7 +198,7 @@ router.get("/:thread_id/posts", async(req, res) => {
     const thread_info = await ThreadCategoryGetController(Number(req_params.thread_id));
 
     //payload.category_idが5（管理者）でない,かつpayload.category_idがcategory_idと一致しない場合はエラーを返す
-    if (Number(payload.category_id) !== 5 && Number(payload.category_id) !== thread_info.category_id) {
+    if (Number(payload.category_id) !== 5 && Number(payload.category_id) !== Number(thread_info.category_id)) {
       res.status(400).send("権限がありません");
       return;
     }
