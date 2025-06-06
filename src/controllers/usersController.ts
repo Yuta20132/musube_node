@@ -319,7 +319,7 @@ export const ProfileEditController = async (
 
 //ユーザ認証のためのメールを再送信する
 export const UserReSendMailController = async (
-  id: string
+  email: string
 ): Promise<mailInfo> => {
   let client;
   try {
@@ -327,11 +327,11 @@ export const UserReSendMailController = async (
     client = await pool.connect();
     console.log("connected");
 
-    //ユーザー情報を更新
+    //ユーザのemailからユーザ情報を取得
     const query = createGetUserByEmailQuery();
     console.log(query);
 
-    const result = await client.query(query, [id]);
+    const result = await client.query(query, [email]);
 
     //1件なければエラーを返す
     if (result.rows.length === 1) {

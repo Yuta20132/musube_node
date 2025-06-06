@@ -348,24 +348,10 @@ router.post("/reset-password", async(req, res) => {
 
 
 //登録確認メールの再送信
-router.get("/register-resend", async(req, res) => {
+router.post("/register-resend", async(req, res) => {
 
-  //トークンがあるか確認
-  const token = req.cookies.bulletin_token;
-  if (token === undefined) {
-    res.status(400).send("トークンがありません");
-    return;
-  }
-
-  //トークンの検証
-  if (!verifyJWT(token)) {
-    res.status(400).send("トークンが無効です");
-    return;
-  }
-
-
-  console.log("resend Mail when registering");
-  console.log(req.body);
+  console.log("登録時のメールの再送信");
+  console.log(`body ${req.body}`);
 
   //emailがない場合はエラーを返す
   if(!req.body.email) {
@@ -493,24 +479,17 @@ router.get("/category-resend", async(req, res) => {
 
 //http://localhost:8080/users/verify
 //メール認証
-//未実装
 router.post("/verify", async(req, res) => {
   console.log("メール認証");
 
+  //verify?token=xxxxxxxxxxxxを受け取る
   let token;
-  console.log(req.body.token);
-
-  //tokenがリクエストボディにあれば取得
-  if (!req.body.token) {
+  //トークンがない場合はエラーを返す
+  if (!req.query.token) {
     res.status(400).send("トークンがありません");
     return;
-  } else {
-    if (typeof req.body.token !== "string") {
-      res.status(400).send("トークンが文字列ではありません");
-      return;
-    } else {
-      token = String(req.body.token);
-    }
+  }else {
+    token = String(req.query.token);
   }
   
   try {
