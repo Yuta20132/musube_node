@@ -1,6 +1,6 @@
 import express from "express";
 import { getPostsRequest, Thread, thread_registration } from "../model/Threads";
-import { GetPostsByThreadIdController, ThreadCategoryGetController, ThreadGetController, ThreadRegistrationController } from "../controllers/threadsController";
+import { GetPostsByThreadIdController, ThreadCategoryGetController, ThreadGetController, ThreadRegistrationController, ThreadDeleteController } from "../controllers/threadsController";
 import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { user_login } from "../model/User";
 
@@ -219,5 +219,61 @@ router.get("/:thread_id/posts", async(req, res) => {
   }
 
 });
+
+router.delete("/", async (req, res) => {
+  const { thread_id, user_id } = req.body;
+  if (thread_id === undefined || user_id === undefined) {
+    res.status(400).send("thread_idまたはuser_idが入力されていません");
+    return;
+  }
+
+  //スレッドIDを数値に変換できない場合はエラーを返す
+  if (isNaN(Number(thread_id))) {
+    res.status(400).send("thread_idが数値ではありません");
+    return;
+  }
+
+  
+  const token = req.cookies.bulletin_token;
+  if (token === undefined || token === null) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+  const payload_user_id = payload.user_id;
+
+  //1.payloadのユーザIDと受け取ったユーザIDが一致しない
+  //2.payloadのカテゴリIDが5（管理者）じゃない
+  //1と2の両方が満たされた場合はエラーを返す
+  if (Number(payload_user_id) !== Number(user_id) && Number(payload.category_id) !== 5) {
+    res.status(400).send("権限がありません");
+    return;
+  }
+
+  try {
+    await ThreadDeleteController(Number(thread_id));
+    res.status(200).send("スレッドを削除しました");
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send("何らかのエラーが発生: " + error);
+    }
+  }
+
+  
+})
 
 export default router;
