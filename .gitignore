@@ -5,3 +5,5 @@ node_modules/
 /src/components/
 
 src/db/client.ts
+
+.tmp

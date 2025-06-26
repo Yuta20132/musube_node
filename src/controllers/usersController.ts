@@ -11,6 +11,8 @@ import {
   createLoginQuery,
   createRegistrationQuery,
   createSearchUserQuery,
+  createSearchUserWithPaginationQuery,
+  createSearchUserCountQuery,
   createUpdateUserQuery,
   createGetChangesByUserIdQuery,
   createUpdatePendingUserChangesQuery,
@@ -24,6 +26,8 @@ import crypto from "crypto";
 import { sendMail } from "../components/sendMail";
 import { TokenExpiredError } from "jsonwebtoken";
 import { convertUtcToJst } from "../components/timeUtils";
+import { UserSearchResponse } from "../types/pagination";
+import { validatePaginationParams, calculatePagination, calculateOffset } from "../utils/paginationHelper";
 
 //getTokenInfoControllerで取得したcategory_idとuser_idを返却するためのクラス
 export class user_verify {
@@ -852,6 +856,62 @@ export const SearchUsersController = async (username: string) => {
   } catch (err) {
     console.log(err);
     throw new Error("Error searching users");
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+};
+
+export const SearchUsersWithPaginationController = async (
+  username: string, 
+  page: number = 1, 
+  limit: number = 20
+): Promise<UserSearchResponse> => {
+  let client;
+
+  try {
+    // パラメータのバリデーション
+    const validatedParams = validatePaginationParams(page, limit);
+    
+    client = await pool.connect();
+    console.log("connected");
+
+    // 総件数を取得
+    const countQuery = createSearchUserCountQuery();
+    const countResult = await client.query(countQuery, [username]);
+    const total = parseInt(countResult.rows[0].total);
+
+    // ページネーション情報を計算
+    const pagination = calculatePagination(validatedParams.page, validatedParams.limit, total);
+    
+    // オフセットを計算
+    const offset = calculateOffset(validatedParams.page, validatedParams.limit);
+
+    // ユーザ検索クエリ（ページネーション対応）
+    const searchQuery = createSearchUserWithPaginationQuery();
+    const searchResult = await client.query(searchQuery, [username, validatedParams.limit, offset]);
+    
+    console.log("ページネーション検索結果");
+    console.dir(searchResult, { depth: null });
+
+    return {
+      users: searchResult.rows,
+      pagination
+    };
+  } catch (err) {
+    console.log(err);
+    if (err instanceof Error) {
+      throw new Error(err.message);
+    } else {
+      throw new Error("Error searching users with pagination");
+    }
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
   }
 };
 
