@@ -1,6 +1,6 @@
 import express from 'express';
 import { getPayloadFromJWT, verifyJWT } from '../components/jwt';
-import { CommentCreateController, CommentDeleteController } from '../controllers/commentController';
+import { CommentCreateController, CommentDeleteController, CommentUpdateController } from '../controllers/commentController';
 
 const router = express.Router();
 
@@ -68,6 +68,64 @@ router.post("/", async (req, res) => {
   }
 
 
+});
+
+//PUT /comments - コメント更新
+router.put("/", async (req, res) => {
+  const { comment_id, content } = req.body;
+  
+  // リクエストボディの検証
+  if (comment_id === undefined || content === undefined) {
+    res.status(400).send("comment_idまたはcontentが入力されていません");
+    return;
+  }
+
+  // コメントIDを数値に変換できない場合はエラーを返す
+  if (isNaN(Number(comment_id))) {
+    res.status(400).send("comment_idが数値ではありません");
+    return;
+  }
+
+  // contentが文字列でない場合はエラーを返す
+  if (typeof content !== 'string') {
+    res.status(400).send("contentが文字列ではありません");
+    return;
+  }
+
+  // contentが空の場合はエラーを返す
+  if (content.trim() === '') {
+    res.status(400).send("contentが空です");
+    return;
+  }
+
+  // トークン検証
+  const token = req.cookies.bulletin_token;
+  if (token === undefined || token === null) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  try {
+    await CommentUpdateController(Number(comment_id), content, payload.user_id);
+    res.status(200).send("コメントの更新に成功しました");
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send("何らかのエラーが発生: " + error);
+    }
+  }
 });
 
 router.delete("/", async (req, res) => {
