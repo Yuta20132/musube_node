@@ -53,3 +53,33 @@ export const CommentCreateController = async (post_id: number, user_id: string, 
     console.log("disconnected\n");
   }
 }
+
+export const CommentDeleteController = async (comment_id: number) => {
+  let client;
+
+  try {
+    client = await pool.connect();
+    const query = "DELETE FROM comments WHERE id = $1";
+    const result = await client.query(query, [comment_id]);
+
+    console.log(result.rowCount);
+    if (result.rowCount === 0) {
+      throw new Error("指定されたコメントが存在しません");
+    } else {
+      console.log(result.rowCount);
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      console.log(error.message);
+      throw new Error(error.message);
+    } else {
+      console.log("予期しないエラー", error);
+      throw new Error("何らかのエラーが発生");
+    }
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
