@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, getTokenInfoController, MyInfoGetController, PasswordResetRequestController, ProfileEditController, ProfileReSendMailController, ProfileValidationController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, getTokenInfoController, MyInfoGetController, PasswordResetRequestController, ProfileEditController, ProfileReSendMailController, ProfileValidationController, SearchUsersController, SearchUsersWithPaginationController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { profile } from "console";
 
@@ -77,7 +77,7 @@ router.get("/", async (req, res) => {
 });
 
 
-//GET /users/search?username=johndoe
+//GET /users/search?username=johndoe&page=1&limit=20
 router.get("/search", async(req, res) => {
   console.log("ユーザ検索");
 
@@ -107,16 +107,31 @@ router.get("/search", async(req, res) => {
     return;
   }
 
-  // クエリパラメータから `username` を取得後、文字列に変換
+  // クエリパラメータから各パラメータを取得
   const username = String(req.query.username);
+  const page = req.query.page ? Number(req.query.page) : 1;
+  const limit = req.query.limit ? Number(req.query.limit) : 20;
+
+  // ページネーション機能が要求されているかチェック
+  const isPaginationRequested = req.query.page !== undefined || req.query.limit !== undefined;
 
   try {
-    const users = await SearchUsersController(username);
-
-    res.status(200).send(users);
+    if (isPaginationRequested) {
+      // ページネーション対応の検索
+      const result = await SearchUsersWithPaginationController(username, page, limit);
+      res.status(200).send(result);
+    } else {
+      // 従来の検索（後方互換性のため）
+      const users = await SearchUsersController(username);
+      res.status(200).send(users);
+    }
   } catch (err) {
     console.log(err);
-    res.status(400).send("ユーザの取得に失敗しました");
+    if (err instanceof Error) {
+      res.status(400).send(err.message);
+    } else {
+      res.status(400).send("ユーザの取得に失敗しました");
+    }
   }
 });
 
