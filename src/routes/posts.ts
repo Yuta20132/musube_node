@@ -1,8 +1,8 @@
 import e from "express";
 import express from "express";
 import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
-import { CommentGetByPostIdController, PostCreateController, PostDeleteController, PostGetController } from "../controllers/postController";
-import { getCommentsRequest, post_registration } from "../model/Post";
+import { CommentGetByPostIdController, PostCreateController, PostDeleteController, PostGetController, PostUpdateController } from "../controllers/postController";
+import { getCommentsRequest, post_registration, post_update } from "../model/Post";
 
 const router = express.Router();
 
@@ -93,6 +93,76 @@ router.post("/", async (req, res) => {
     res.status(200).send("投稿に成功しました");
   } catch (error) {
     console.log(error);
+    if (error instanceof Error) {
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send("何らかのエラーが発生: " + error);
+    }
+  }
+});
+
+//PUT /posts - ポスト更新
+router.put("/", async (req, res) => {
+  const { post_id, title, content } = req.body;
+  
+  // リクエストボディの検証
+  if (post_id === undefined || title === undefined || content === undefined) {
+    res.status(400).send("post_id、title、またはcontentが入力されていません");
+    return;
+  }
+
+  // ポストIDを数値に変換できない場合はエラーを返す
+  if (isNaN(Number(post_id))) {
+    res.status(400).send("post_idが数値ではありません");
+    return;
+  }
+
+  // titleが文字列でない場合はエラーを返す
+  if (typeof title !== 'string') {
+    res.status(400).send("titleが文字列ではありません");
+    return;
+  }
+
+  // contentが文字列でない場合はエラーを返す
+  if (typeof content !== 'string') {
+    res.status(400).send("contentが文字列ではありません");
+    return;
+  }
+
+  // titleまたはcontentが空の場合はエラーを返す
+  if (title.trim() === '' || content.trim() === '') {
+    res.status(400).send("titleまたはcontentが空です");
+    return;
+  }
+
+  // トークン検証
+  const token = req.cookies.bulletin_token;
+  if (token === undefined || token === null) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  const payload = getPayloadFromJWT(token);
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  const postUpdate: post_update = {
+    post_id: Number(post_id),
+    title: title,
+    content: content
+  };
+
+  try {
+    await PostUpdateController(postUpdate, payload.user_id);
+    res.status(200).send("ポストの更新に成功しました");
+  } catch (error) {
     if (error instanceof Error) {
       res.status(400).send(error.message);
     } else {
