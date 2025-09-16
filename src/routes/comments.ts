@@ -129,49 +129,43 @@ router.put("/", async (req, res) => {
 });
 
 router.delete("/", async (req, res) => {
-  const { comment_id, user_id } = req.body;
-  if (comment_id === undefined || user_id === undefined) {
-    res.status(400).send("comment_idまたはuser_idが入力されていません");
+  const { comment_id } = req.body;
+  if (comment_id === undefined) {
+    res.status(400).send("comment_idが入力されていません");
     return;
   }
 
-  //コメントIDを数値に変換できない場合はエラーを返す
+  // コメントIDを数値に変換できない場合はエラーを返す
   if (isNaN(Number(comment_id))) {
     res.status(400).send("comment_idが数値ではありません");
     return;
   }
 
-  
+  // トークン取得
   const token = req.cookies.bulletin_token;
   if (token === undefined || token === null) {
     res.status(400).send("トークンがありません");
     return;
   }
 
-  //トークンの検証
+  // トークン検証
   if (!verifyJWT(token)) {
     res.status(400).send("トークンが無効です");
     return;
   }
 
-  //トークンから情報を取得
+  // トークンから情報を取得
   const payload = getPayloadFromJWT(token);
   if (payload === null) {
     res.status(400).send("トークンの解析に失敗しました");
     return;
   }
-  const payload_user_id = payload.user_id;
 
-  //1.payloadのユーザIDと受け取ったユーザIDが一致しない
-  //2.payloadのカテゴリIDが5（管理者）じゃない
-  //1と2の両方が満たされた場合はエラーを返す
-  if (Number(payload_user_id) !== Number(user_id) && Number(payload.category_id) !== 5) {
-    res.status(400).send("権限がありません");
-    return;
-  }
+  const requesterUserId: string = payload.user_id;
+  const isAdmin: boolean = Number(payload.category_id) === 5;
 
   try {
-    await CommentDeleteController(Number(comment_id));
+    await CommentDeleteController(Number(comment_id), requesterUserId, isAdmin);
     res.status(200).send("コメントを削除しました");
   } catch (error) {
     if (error instanceof Error) {
@@ -180,8 +174,6 @@ router.delete("/", async (req, res) => {
       res.status(400).send("何らかのエラーが発生: " + error);
     }
   }
-
-  
 })
 
 export default router;
