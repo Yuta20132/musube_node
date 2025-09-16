@@ -65,19 +65,43 @@ export const PostCreateController = async (post: post_registration, category_id:
   }
 };
 
-export const PostDeleteController = async (post_id: number) => {
+export const PostDeleteController = async (
+  post_id: number,
+  requester_user_id: string,
+  requester_is_admin: boolean
+) => {
   let client;
 
   try {
     client = await pool.connect();
-    const query = "DELETE FROM posts WHERE id = $1";
-    const result = await client.query(query, [post_id]);
+    // まず対象ポストの存在確認と所有者取得
+    const getPostQuery = createGetPostByIdQuery();
+    const postResult = await client.query(getPostQuery, [post_id]);
 
-    console.log(result.rowCount);
-    if (result.rowCount === 0) {
-      throw new Error("指定された投稿が存在しません");
+    if (postResult.rowCount === 0) {
+      throw new Error("指定されたポストが存在しません");
+    }
+
+    const ownerUserId: string = String(postResult.rows[0].user_id);
+
+    // 権限チェック（管理者 or 投稿者本人）
+    if (!requester_is_admin && ownerUserId !== requester_user_id) {
+      throw new Error("このポストを削除する権限がありません");
+    }
+
+    // 削除実行（本人の場合は所有者であることをWHEREでも担保）
+    let result;
+    if (requester_is_admin) {
+      const queryAdmin = "DELETE FROM posts WHERE id = $1";
+      result = await client.query(queryAdmin, [post_id]);
     } else {
-      console.log(result.rowCount);
+      const queryOwner = "DELETE FROM posts WHERE id = $1 AND user_id = $2";
+      result = await client.query(queryOwner, [post_id, requester_user_id]);
+    }
+
+    if (result.rowCount === 0) {
+      // 理論上到達しないが、同時更新などの場合に備える
+      throw new Error("ポストの削除に失敗しました");
     }
   } catch (error) {
     if (error instanceof Error) {
@@ -87,6 +111,11 @@ export const PostDeleteController = async (post_id: number) => {
       console.log("予期しないエラー", error);
       throw new Error("何らかのエラーが発生");
     }
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
   }
 }
 

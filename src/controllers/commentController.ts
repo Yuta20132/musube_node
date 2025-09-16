@@ -54,19 +54,42 @@ export const CommentCreateController = async (post_id: number, user_id: string, 
   }
 }
 
-export const CommentDeleteController = async (comment_id: number) => {
+export const CommentDeleteController = async (
+  comment_id: number,
+  requester_user_id: string,
+  requester_is_admin: boolean
+) => {
   let client;
 
   try {
     client = await pool.connect();
-    const query = "DELETE FROM comments WHERE id = $1";
-    const result = await client.query(query, [comment_id]);
+    // 対象コメントの存在確認と所有者取得
+    const getCommentQuery = createGetCommentByIdQuery();
+    const commentResult = await client.query(getCommentQuery, [comment_id]);
 
-    console.log(result.rowCount);
-    if (result.rowCount === 0) {
+    if (commentResult.rowCount === 0) {
       throw new Error("指定されたコメントが存在しません");
+    }
+
+    const ownerUserId: string = String(commentResult.rows[0].user_id);
+
+    // 権限チェック（管理者 or 投稿者本人）
+    if (!requester_is_admin && ownerUserId !== requester_user_id) {
+      throw new Error("このコメントを削除する権限がありません");
+    }
+
+    // 削除実行
+    let result;
+    if (requester_is_admin) {
+      const queryAdmin = "DELETE FROM comments WHERE id = $1";
+      result = await client.query(queryAdmin, [comment_id]);
     } else {
-      console.log(result.rowCount);
+      const queryOwner = "DELETE FROM comments WHERE id = $1 AND user_id = $2";
+      result = await client.query(queryOwner, [comment_id, requester_user_id]);
+    }
+
+    if (result.rowCount === 0) {
+      throw new Error("コメントの削除に失敗しました");
     }
   } catch (error) {
     if (error instanceof Error) {
