@@ -1,6 +1,6 @@
-import { createGetCommentsByPostIdQuery, createGetPostInfoQuery, createPostQuery } from "../components/createQuery";
+import { createGetCommentsByPostIdQuery, createGetPostInfoQuery, createGetPostByIdQuery, createUpdatePostQuery, createPostQuery } from "../components/createQuery";
 import pool from "../db/client";
-import { getCommentsRequest, getCommentsResponse, post_info, post_registration } from "../model/Post";
+import { getCommentsRequest, getCommentsResponse, post_info, post_registration, post_update } from "../model/Post";
 export const PostCreateController = async (post: post_registration, category_id: Number) => {
 
   let client;
@@ -161,6 +161,52 @@ export const CommentGetByPostIdController = async (p_req: getCommentsRequest): P
       throw new Error(error.message);
     } else {
       throw new Error("なんらかのエラーが発生しました" + error);
+    }
+  } finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+}
+
+export const PostUpdateController = async (post: post_update, user_id: string) => {
+  let client;
+
+  try {
+    client = await pool.connect();
+    
+    // まずポストが存在し、ユーザが投稿者であることを確認
+    const getPostQuery = createGetPostByIdQuery();
+    const postResult = await client.query(getPostQuery, [post.post_id]);
+
+    if (postResult.rowCount === 0) {
+      throw new Error("指定されたポストが存在しません");
+    }
+
+    const existingPost = postResult.rows[0];
+    if (existingPost.user_id !== user_id) {
+      throw new Error("このポストを編集する権限がありません");
+    }
+
+    // ポストを更新
+    const updateQuery = createUpdatePostQuery();
+    const updateResult = await client.query(updateQuery, [post.title, post.content, post.post_id, user_id]);
+
+    if (updateResult.rowCount === 0) {
+      throw new Error("ポストの更新に失敗しました");
+    }
+
+    console.log("ポストの更新に成功");
+    return updateResult.rows[0];
+
+  } catch (error) {
+    if (error instanceof Error) {
+      console.log("ポスト更新エラー", error.message);
+      throw new Error(error.message);
+    } else {
+      console.log("予期しないエラー: ", error);
+      throw new Error("何らかのエラーが発生");
     }
   } finally {
     if (client) {
