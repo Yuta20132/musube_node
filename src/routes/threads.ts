@@ -1,6 +1,6 @@
 import express from "express";
 import { getPostsRequest, Thread, thread_registration } from "../model/Threads";
-import { GetPostsByThreadIdController, ThreadCategoryGetController, ThreadGetController, ThreadRegistrationController, ThreadDeleteController } from "../controllers/threadsController";
+import { GetPostsByThreadIdController, ThreadCategoryGetController, ThreadGetController, ThreadGetWithPaginationController, ThreadRegistrationController, ThreadDeleteController } from "../controllers/threadsController";
 import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { user_login } from "../model/User";
 
@@ -63,6 +63,59 @@ router.get("/:category_id", async(req, res) => {
     console.log("取得したスレッド");
     console.log(Threads);
     res.status(200).send(Threads);
+  } catch (err) {
+    if (err instanceof Error) {
+      res.status(400).send(err.message);
+    } else {
+      res.status(400).send("なんらかのエラーが発生しました" + err);
+    }
+  }
+});
+
+// スレッド取得（ページネーション）
+// GET /threads/:category_id/paginate?page=1&limit=20
+router.get("/:category_id/paginate", async (req, res) => {
+  const req_category_id = req.params.category_id;
+  if (req_category_id === undefined) {
+    res.status(400).send("カテゴリIDがありません");
+    return;
+  }
+
+  // クッキーからトークン取得
+  const token = await req.cookies.bulletin_token;
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return;
+  }
+
+  try {
+    // トークン検証
+    if (!verifyJWT(token)) {
+      res.status(400).send("トークンが無効です");
+      return;
+    }
+
+    const payload = getPayloadFromJWT(token);
+    if (payload === null) {
+      throw new Error("トークンの解析に失敗しました");
+    }
+
+    // アクセス権限チェック
+    const user: user_login = {
+      user_id: payload.user_id,
+      category_id: payload.category_id,
+    };
+    if (Number(req_category_id) !== Number(user.category_id) && Number(user.category_id) !== 5 && Number(req_category_id) !== 1) {
+      res.status(400).send("権限がありません");
+      return;
+    }
+
+    // クエリからページとリミットを取得（デフォルト: page=1, limit=20）
+    const page = req.query.page ? Number(req.query.page) : 1;
+    const limit = req.query.limit ? Number(req.query.limit) : 20;
+
+    const result = await ThreadGetWithPaginationController(req_category_id, page, limit);
+    res.status(200).send(result);
   } catch (err) {
     if (err instanceof Error) {
       res.status(400).send(err.message);

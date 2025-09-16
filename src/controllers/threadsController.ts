@@ -1,8 +1,10 @@
 import { get } from "http";
-import {  createGetCategoryQuery, CreateGetPostsByThreadIdQuery, createGetThreadInfoQuery, createGetThreadsQuery, createThreadQuery } from "../components/createQuery";
+import {  createGetCategoryQuery, CreateGetPostsByThreadIdQuery, createGetThreadInfoQuery, createGetThreadsQuery, createThreadQuery, createGetThreadsWithPaginationQuery, createGetThreadsCountQuery } from "../components/createQuery";
 import pool from "../db/client";
 import { getPostsRequest, getPostsResponse, Thread, thread_info, thread_registration } from "../model/Threads";
 import { user_login } from "../model/User";
+import { PaginationMeta } from "../types/pagination";
+import { validatePaginationParams, calculatePagination, calculateOffset } from "../utils/paginationHelper";
 
 
 
@@ -201,6 +203,51 @@ export const ThreadDeleteController = async (thread_id: number) => {
     } else {
       console.log("予期しないエラー", error);
       throw new Error("何らかのエラーが発生");
+    }} finally {
+    if (client) {
+      client.release();
+    }
+    console.log("disconnected\n");
+  }
+};
+// カテゴリIDからスレッドをページネーション付きで取得
+export const ThreadGetWithPaginationController = async (
+  category_id: string | number,
+  page: number = 1,
+  limit: number = 20
+): Promise<{ threads: Thread[]; pagination: PaginationMeta }> => {
+  let client;
+  try {
+    // パラメータを検証
+    const { page: validPage, limit: validLimit } = validatePaginationParams(page, limit);
+
+    // DB 接続
+    client = await pool.connect();
+    console.log("connected");
+
+    // 総件数の取得
+    const countQuery = createGetThreadsCountQuery();
+    const countResult = await client.query(countQuery, [category_id]);
+    const total = parseInt(countResult.rows[0].total);
+
+    // ページネーション情報の計算
+    const pagination = calculatePagination(validPage, validLimit, total);
+
+    // オフセット計算
+    const offset = calculateOffset(validPage, validLimit);
+
+    // スレッド取得（ページネーション対応）
+    const listQuery = createGetThreadsWithPaginationQuery();
+    const listResult = await client.query(listQuery, [category_id, validLimit, offset]);
+
+    const threads: Thread[] = listResult.rows;
+
+    return { threads, pagination };
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("なんらかのエラーが発生しました" + error);
     }
   } finally {
     if (client) {
@@ -209,3 +256,4 @@ export const ThreadDeleteController = async (thread_id: number) => {
     console.log("disconnected\n");
   }
 }
+
