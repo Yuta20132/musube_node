@@ -1,6 +1,6 @@
 import express from "express";
 import { getPostsRequest, Thread, thread_registration } from "../model/Threads";
-import { GetPostsByThreadIdController, ThreadCategoryGetController, ThreadGetController, ThreadGetWithPaginationController, ThreadRegistrationController, ThreadDeleteController } from "../controllers/threadsController";
+import { GetPostsByThreadIdController, ThreadCategoryGetController, ThreadGetController, ThreadGetWithPaginationController, ThreadGetWithPaginationController, ThreadRegistrationController, ThreadDeleteController } from "../controllers/threadsController";
 import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { user_login } from "../model/User";
 
