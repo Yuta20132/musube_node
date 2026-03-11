@@ -97,8 +97,12 @@ router.post("/", async(req, res) => {
     return;
   }
 
-  //payload.caegory_idが5（管理者）でない,かつpayload.category_idがcategory_idと一致しない場合はエラーを返す
-  if (Number(payload.category_id) !== 5 && Number(payload.category_id) !== Number(req.body.category_id)) {
+  //payload.category_idが5（管理者）でない、かつpayload.category_idとcategory_idが一致せず、かつcategory_idが1（全体）でない場合はエラーを返す
+  if (
+    Number(payload.category_id) !== 5 &&
+    Number(payload.category_id) !== Number(req.body.category_id) &&
+    Number(req.body.category_id) !== 1
+  ) {
     res.status(400).send("権限がありません");
     return;
   }
@@ -196,13 +200,18 @@ router.get("/:thread_id/posts", async(req, res) => {
 
   try {
     const thread_info = await ThreadCategoryGetController(Number(req_params.thread_id));
+    const thread_category_id = Number(thread_info.category_id);
 
 
-    console.log("thread_info: ", thread_info.category_id);
+    console.log("thread_info: ", thread_category_id);
     console.log("payload: ", payload.category_id);
 
-    //payload.category_idが5（管理者）でない,かつpayload.category_idがcategory_idと一致しない場合はエラーを返す
-    if (Number(payload.category_id) !== 5 && Number(payload.category_id) != thread_info.category_id) {
+    //payload.category_idが5（管理者）でない、かつスレッドのcategory_idとpayload.category_idが一致せず、かつスレッドがcategory_id=1（全体）でない場合はエラーを返す
+    if (
+      Number(payload.category_id) !== 5 &&
+      Number(payload.category_id) !== thread_category_id &&
+      thread_category_id !== 1
+    ) {
       res.status(400).send("権限がありません");
       return;
     }
