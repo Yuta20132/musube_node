@@ -1,0 +1,182 @@
+import express from "express";
+import { getPostsRequest, Thread, thread_registration } from "../model/Threads";
+import { GetPostsByThreadIdController, ThreadCategoryGetController, ThreadGetController, ThreadRegistrationController } from "../controllers/threadsController";
+import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
+import { user_login } from "../model/User";
+
+
+const router = express.Router();
+
+router.get("/", (req, res) => {
+  //とりあえず全スレッドの情報を返す
+  //その中のポストやコメントの情報は他のAPIで取得するようにする？あとで考える
+  res.send("All threads");
+});
+
+//スレッドの取得
+// GET /threads/:category_id
+router.get("/:category_id", async(req, res) => {
+  //カテゴリIDを受け取る
+  const req_category_id = req.params.category_id;
+  //カテゴリIDがない場合はエラーを返す
+  if (req_category_id === undefined) {
+    res.status(400).send("カテゴリIDがありません");
+    return;
+  }
+
+  //クッキーからトークンを取得
+  const token = await req.cookies.bulletin_token;
+  //なければエラーを返す
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return
+  }
+
+  try {
+    //トークンの検証
+    if (!verifyJWT(token)) {
+      res.status(400).send("トークンが無効です");
+      return;
+    }
+
+    //トークンから情報を取得
+    const payload = getPayloadFromJWT(token);
+
+    if (payload === null) {
+      throw new Error("トークンの解析に失敗しました");
+    }
+
+
+    //payloadからユーザIDとカテゴリIDを取得し、user_loginに代入
+    const user: user_login = {
+      user_id: payload.user_id,
+      category_id: payload.category_id
+    }
+
+    //カテゴリIDが一致せず、かつカテゴリIDが5（管理者）でない場合、またはカテゴリIDが1（全体）でない場合はエラーを返す
+    if(req_category_id !== user.category_id  && user.category_id !== "5" && req_category_id !== "1") {
+      res.status(400).send("権限がありません");
+      return;
+    }
+
+    const Threads = await ThreadGetController(req_category_id);
+    console.log("取得したスレッド");
+    console.log(Threads);
+    res.status(200).send(Threads);
+  } catch (err) {
+    if (err instanceof Error) {
+      res.status(400).send(err.message);
+    } else {
+      res.status(400).send("なんらかのエラーが発生しました" + err);
+    }
+  }
+});
+
+//スレッド作成
+//スレッドのタイトルと内容、カテゴリIDを受け取る
+router.post("/", async(req, res) => {
+  //クッキーからトークンを取得                                          const token = await req.cookies.bulletin_token;                       //なければエラーを返す                                                if (token === undefined) {                                              res.status(400).send("トークンがありません");                         return                                                              }
+
+
+  let { title, description, category_id } = req.body;
+  //タイトルまたはカテゴリIDがない場合はエラーを返す
+  if (title === undefined || category_id === undefined) {
+    res.status(400).send("タイトルまたはカテゴリIDがありません");
+    return;
+  }
+
+  //内容がない場合は空文字を代入
+  if (description === undefined) {
+    description = "";
+  }
+
+  const thread: thread_registration = {
+    title: title,
+    description: description,
+    category_id: category_id
+  }
+
+  try {
+    //controllerにスレッド情報とセッションIDを渡す
+    const is_success = await ThreadRegistrationController(session_id, thread);
+    //成功した場合はステータスコード200を返す
+    if (is_success) {
+      res.status(200).send("スレッドの作成に成功しました");
+    } else {
+      res.status(400).send("スレッドの作成に失敗しました");
+    }
+  } catch (err) {
+    if (err instanceof Error) {
+      res.status(400).send(err.message);
+    } else {
+      res.status(400).send("なんらかのエラーが発生しました" + err);
+    }
+  }
+  
+
+
+});
+
+
+//スレッドの中の投稿を取得
+//limitは
+//GET /threads/123/posts?limit=5&offset=10
+//例1 limit=5 offset=10 な11件目から15件目までの投稿を取得
+//例2 limit=5 offset=0 な1件目から5件目までの投稿を取得
+router.get("/:thread_id/posts", async(req, res) => {
+  //クッキーからトークンを取得
+  const token = req.cookies.bulletin_token;
+  //なければエラーを返す
+  if (token === undefined) {
+    res.status(400).send("トークンがありません");
+    return
+  }
+  //トークンの検証
+  if (!verifyJWT(token)) {
+    res.status(400).send("トークンが無効です");
+    return;
+  }
+
+  //トークンから情報を取得
+  const payload = getPayloadFromJWT(token);
+
+  if (payload === null) {
+    res.status(400).send("トークンの解析に失敗しました");
+    return;
+  }
+
+  //情報をGetPostsRequestに代入
+  //limitとoffsetがない場合はデフォルト値を代入
+  const req_params: getPostsRequest = {
+    thread_id: req.params.thread_id,
+    limit: req.query.limit === undefined ? 5 : Number(req.query.limit),
+    offset: req.query.offset === undefined ? 0 : Number(req.query.offset)
+  }
+
+  try {
+    const thread_info = await ThreadCategoryGetController(Number(req_params.thread_id));
+
+    //payload.category_idが5（管理者）でない,かつpayload.category_idがcategory_idと一致しない場合はエラーを返す
+    if (payload.category_id !== "5" && Number(payload.category_id) !== thread_info.category_id) {
+      res.status(400).send("権限がありません");
+      return;
+    }
+
+    const posts = await GetPostsByThreadIdController(req_params);
+    
+    posts.thread_title = thread_info.title;
+    posts.thread_description = thread_info.description;
+    
+    res.status(200).send(posts);
+
+  } catch (err) {
+    if (err instanceof Error) {
+      res.status(400).send(err.message);
+    } else {
+      res.status(400).send("なんらかのエラーが発生" + err);
+    }
+  }
+
+});
+
+export default router;

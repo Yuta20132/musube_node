@@ -17,7 +17,7 @@ const WS_PORT = 8080;
 const corsOptions = {
   origin: 'http://localhost:3000',
   methods: 'GET,POST,PUT,DELETE', // 許可するHTTPメソッド
-  allowedHeaders: 'Content-Type,Authorization', // 許可するヘッダー
+  allowedHeaders: 'Content-Type,Authorization,X-CSRFToken',
   credentials: true, // クッキーを使用する場合はtrueに設定
 };
 

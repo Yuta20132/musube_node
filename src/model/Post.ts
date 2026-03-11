@@ -55,9 +55,3 @@ export type post_info = {
   user_id: string;
   created_at: Date;
 }
-
-export interface post_update {
-  post_id: number;
-  title: string;
-  content: string;
-}

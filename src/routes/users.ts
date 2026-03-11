@@ -8,7 +8,7 @@ import { compare } from "bcrypt";
 import pool from "../db/client";
 import  { sendMail, createVerificationToken } from "../components/sendMail";
 import { create } from "domain";
-import { AllUsersGetController, getTokenInfoController, MyInfoGetController, PasswordResetRequestController, ProfileEditController, ProfileReSendMailController, ProfileValidationController, SearchUsersController, SearchUsersWithPaginationController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
+import { AllUsersGetController, getTokenInfoController, MyInfoGetController, PasswordResetRequestController, PasswordResetValidateController, ProfileEditController, ProfileReSendMailController, ProfileValidationController, SearchUsersController, user_verify, UserLoginController, UserRegistrationController, UserReSendMailController, UserValidationController} from "../controllers/usersController";
 import { generateJWT, getPayloadFromJWT, verifyJWT } from "../components/jwt";
 import { profile } from "console";
 
@@ -21,6 +21,7 @@ type ProfileEditRequestBody = {
   email?: string;
   password?: string;
   institution?: string;
+  description?: string;
 };
 
 type profile_edit = {
@@ -30,8 +31,10 @@ type profile_edit = {
   last_name?: string;
   category_id?: number;
   email?: string;
+  contact_email?: string;
   password?: string;
   institution?: string;
+  description?: string;
 }
 
 
@@ -77,7 +80,7 @@ router.get("/", async (req, res) => {
 });
 
 
-//GET /users/search?username=johndoe&page=1&limit=20
+//GET /users/search?username=johndoe
 router.get("/search", async(req, res) => {
   console.log("ユーザ検索");
 
@@ -107,31 +110,16 @@ router.get("/search", async(req, res) => {
     return;
   }
 
-  // クエリパラメータから各パラメータを取得
+  // クエリパラメータから `username` を取得後、文字列に変換
   const username = String(req.query.username);
-  const page = req.query.page ? Number(req.query.page) : 1;
-  const limit = req.query.limit ? Number(req.query.limit) : 20;
-
-  // ページネーション機能が要求されているかチェック
-  const isPaginationRequested = req.query.page !== undefined || req.query.limit !== undefined;
 
   try {
-    if (isPaginationRequested) {
-      // ページネーション対応の検索
-      const result = await SearchUsersWithPaginationController(username, page, limit);
-      res.status(200).send(result);
-    } else {
-      // 従来の検索（後方互換性のため）
-      const users = await SearchUsersController(username);
-      res.status(200).send(users);
-    }
+    const users = await SearchUsersController(username);
+
+    res.status(200).send(users);
   } catch (err) {
     console.log(err);
-    if (err instanceof Error) {
-      res.status(400).send(err.message);
-    } else {
-      res.status(400).send("ユーザの取得に失敗しました");
-    }
+    res.status(400).send("ユーザの取得に失敗しました");
   }
 });
 
@@ -172,7 +160,7 @@ router.get("/me", async(req, res) => {
 router.post("/register", async(req, res) => {
   console.log("Registering user");
   console.log(req.body);
-  const { name, first_name, last_name, category_id, institution, email, password } = req.body;
+  const { name, first_name, last_name, category_id, institution, email, password, description } = req.body;
 
   //category_idが5のユーザー（管理者）は、APIからの登録はできないようにする
   if(Number(category_id) === 5) {
@@ -198,7 +186,8 @@ router.post("/register", async(req, res) => {
       category_id: category_id,
       institution: institution,
       email: email,
-      password: hashedPassword
+      password: hashedPassword,
+      description: description ?? ""
     }
 
     const  mailInfo = await UserRegistrationController(user);
@@ -257,43 +246,67 @@ router.put("/", async(req, res) => {
   console.log("ユーザ情報の更新を開始");
 
   // リクエストボディから更新項目を取得
-  const { user_name, first_name, last_name, category_id, email, password, institution } = req.body;
+  const { user_name, first_name, last_name, category_id, email, password, institution, description } = req.body;
+
+  const hasDirectUpdate =
+    user_name !== undefined ||
+    first_name !== undefined ||
+    last_name !== undefined ||
+    password !== undefined ||
+    institution !== undefined ||
+    description !== undefined;
+
+  const hasMailVerificationUpdate =
+    category_id !== undefined ||
+    email !== undefined;
 
   //ボディになんの情報もない場合はエラーを返す
-  if (!user_name && !first_name && !last_name && !category_id && !email && !password && !institution) {
+  if (!hasDirectUpdate && !hasMailVerificationUpdate) {
     res.status(400).send("更新する情報がありません");
     return;
   }
 
-  //emailとcategory_idがどちらもある場合はエラーを返す(ページ的にどちらも送られてくることはないから)
-  if(email && category_id) {
-    res.status(400).send("不正なパラメータ");
+  //メール認証必須の更新と不要の更新を同時に受け付けない
+  if (hasDirectUpdate && hasMailVerificationUpdate) {
+    res.status(400).send("メール認証が必要な更新と不要な更新は同時にできません");
     return;
   }
 
-  
+  //emailとcategory_idはどちらか片方のみ更新可能
+  if (email !== undefined && category_id !== undefined) {
+    res.status(400).send("emailとcategory_idは同時に更新できません");
+    return;
+  }
 
   try {
-    const profile: profile_edit = {
-      user_id: payload.user_id,
-      ...(user_name && { user_name }),//user_nameがあればuser_nameを追加
-      ...(first_name && { first_name }),
-      ...(last_name && { last_name }),
-      ...(category_id && { category_id }),
-      ...(email ? { email } : { email: payload.email }), // emailがあればそれを使用、なければpayload.emailを設定
-      ...(password && { password }),
-      ...(institution && { institution }),
+    const profile: profile_edit = { user_id: payload.user_id };
+
+    //メール認証必須更新
+    if (hasMailVerificationUpdate) {
+      if (category_id !== undefined) {
+        profile.category_id = category_id;
+        //カテゴリ変更確認メールは現在の登録メール宛に送る
+        profile.contact_email = payload.email;
+      }
+
+      if (email !== undefined) {
+        profile.email = email;
+      }
+
+      await ProfileEditController(profile);
+      res.status(200).send("確認メールを送信しました。メール認証後に更新されます");
+      return;
     }
 
-    let token;
-    //emailまたは所属が入力されている場合、トークンの生成を行う
-    // if(profile.email || profile.institution) {
-    //   token = await createVerificationToken(payload.user_id, 1);
-    // }
+    //メール認証不要更新
+    if (user_name !== undefined) profile.user_name = user_name;
+    if (first_name !== undefined) profile.first_name = first_name;
+    if (last_name !== undefined) profile.last_name = last_name;
+    if (password !== undefined) profile.password = password;
+    if (institution !== undefined) profile.institution = institution;
+    if (description !== undefined) profile.description = description;
 
-    const flag = await ProfileEditController(profile);
-
-
+    await ProfileEditController(profile);
     res.status(200).send("ユーザ情報の更新が完了しました");
   } catch (error) {
     console.log(error);
@@ -307,30 +320,10 @@ router.put("/", async(req, res) => {
 
 });
 
-//パスワードのリセット
+//パスワードのリセット(これ使ってないあとで消す)
 //リクエストボディにemailがある場合、そのemailに対してパスワードリセットのメールを送信する
 //emailやcategory_idのようにトークンを発行してメールを送信する
-router.post("/reset-password", async(req, res) => {
-  //tokenがあるか確認
-  // const token = req.cookies.bulletin_token;
-  // if (token === undefined) {
-  //   res.status(400).send("トークンがありません");
-  //   return;
-  // }
-  // //トークンの検証
-  // if (!verifyJWT(token)) {
-  //   res.status(400).send("トークンが無効です");
-  //   return;
-  // }
-  // //トークンから情報を取得
-  // const payload = getPayloadFromJWT(token);
-  // if (payload === null) {
-  //   res.status(400).send("トークンの解析に失敗しました");
-  //   return;
-  // }
-
-  // console.log(`パスワードリセット:${payload.user_id}`);
-
+router.post("/reset-password/", async(req, res) => {
   //emailがない場合はエラーを返す
   if(!req.body.email) {
     res.status(400).send("emailがありません");
@@ -360,13 +353,79 @@ router.post("/reset-password", async(req, res) => {
   }
 });
 
+//パスワードリセットのメールを送信
+//bodyにメールアドレスを含めて送信する
+//tokenを発行してメールを送信する
+router.post("/reset-password/req", async(req, res) => {
+  //emailがない場合はエラーを返す
+  if(!req.body.email) {
+    res.status(400).send("emailがありません");
+    return;
+  }
+  const email = String(req.body.email);
+
+  try {
+  const token = await PasswordResetRequestController(email);
+  //トークンがあれば、payload.emailにメールを送信
+  if(token) {
+    //4はパスワードリセットのメールを表す
+    await sendMail(email, token, 4);
+  } else {
+    res.status(400).send("トークンの生成に失敗しました");
+  }
+  
+
+  //ステータスコード200とメッセージを返す
+  res.status(200).send("メールを送信しました");
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      console.log(error.message);
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
+    }
+  }
+})
+
+//パスワードの設定
+//bodyにメールアドレスとtokenを含めて送信する
+//tokenを検証してパスワードを更新する
+router.post("/reset-password/res", async(req, res) => {
+  //email, token, passwordがない場合はエラーを返す
+  if(!req.body.email || !req.body.token || !req.body.password) {
+    res.status(400).send("emailまたはtokenまたはpasswordがありません");
+    return;
+  }
+
+  const email = String(req.body.email);
+  const token = String(req.body.token);
+  const password = String(req.body.password);
+
+  try {
+    await PasswordResetValidateController(email, token, password);
+    //ステータスコード200とメッセージを返す
+    res.status(200).send("パスワードを更新しました");
+  } catch (error) {
+    console.log("パスワード設定エラー")
+    if (error instanceof Error) {
+      console.log(error.message);
+      res.status(400).send(error.message);
+    } else {
+      res.status(400).send(error);
+    }
+  }
+
+  
+})
+
 
 
 //登録確認メールの再送信
 router.post("/register-resend", async(req, res) => {
 
-  console.log("登録時のメールの再送信");
-  console.log(`body ${req.body}`);
+  console.log("resend Mail when registering");
+  console.log(req.body);
 
   //emailがない場合はエラーを返す
   if(!req.body.email) {
@@ -494,17 +553,24 @@ router.get("/category-resend", async(req, res) => {
 
 //http://localhost:8080/users/verify
 //メール認証
+//未実装
 router.post("/verify", async(req, res) => {
   console.log("メール認証");
 
-  //verify?token=xxxxxxxxxxxxを受け取る
   let token;
-  //トークンがない場合はエラーを返す
-  if (!req.query.token) {
+  console.log(req.body.token);
+
+  //tokenがリクエストボディにあれば取得
+  if (!req.body.token) {
     res.status(400).send("トークンがありません");
     return;
-  }else {
-    token = String(req.query.token);
+  } else {
+    if (typeof req.body.token !== "string") {
+      res.status(400).send("トークンが文字列ではありません");
+      return;
+    } else {
+      token = String(req.body.token);
+    }
   }
   
   try {
@@ -570,6 +636,7 @@ router.post("/verify-profile", async(req, res) => {
   }
 })
 
+
 //ログイン
 router.post("/login", async(req, res) => {
   console.log("Logging in user");
@@ -615,33 +682,6 @@ router.post("/login", async(req, res) => {
   } 
 
 })
-
-//JWTトークンの確認用の一時的なエンドポイント
-// router.get("/check", async(req, res) => {
-//   //クッキーからトークンを取得
-//   const token = req.cookies.bulletin_token;
-//   //トークンがない場合はエラーを返す
-//   if (!token) {
-//     res.status(400).send("トークンがありません");
-//     return;
-//   }
-
-//   //トークンを検証
-//   try {
-//     if(!verifyJWT(token)) {
-//       res.status(400).send("トークンが無効です");
-//       return;
-//     } else {
-//       const payload = getPayloadFromJWT(token);
-//       res.status(200).send(payload);
-//     }
-//   } catch (error) {
-//     if (error instanceof Error) {
-//       console.log(error.message)
-//     }
-//   }
-
-// });
 
 //ログアウト
 router.post("/logout", async(req, res) => {
