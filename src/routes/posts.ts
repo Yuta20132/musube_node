@@ -1,8 +1,8 @@
 import e from "express";
 import express from "express";
 import { getPayloadFromJWT, verifyJWT } from "../components/jwt";
-import { CommentGetByPostIdController, PostCreateController, PostDeleteController, PostGetController, PostUpdateController } from "../controllers/postController";
-import { getCommentsRequest, post_registration, post_update } from "../model/Post";
+import { CommentGetByPostIdController, PostCreateController, PostDeleteController, PostGetController } from "../controllers/postController";
+import { getCommentsRequest, post_registration } from "../model/Post";
 
 const router = express.Router();
 
@@ -101,114 +101,49 @@ router.post("/", async (req, res) => {
   }
 });
 
-//PUT /posts - ポスト更新
-router.put("/", async (req, res) => {
-  const { post_id, title, content } = req.body;
-  
-  // リクエストボディの検証
-  if (post_id === undefined || title === undefined || content === undefined) {
-    res.status(400).send("post_id、title、またはcontentが入力されていません");
-    return;
-  }
-
-  // ポストIDを数値に変換できない場合はエラーを返す
-  if (isNaN(Number(post_id))) {
-    res.status(400).send("post_idが数値ではありません");
-    return;
-  }
-
-  // titleが文字列でない場合はエラーを返す
-  if (typeof title !== 'string') {
-    res.status(400).send("titleが文字列ではありません");
-    return;
-  }
-
-  // contentが文字列でない場合はエラーを返す
-  if (typeof content !== 'string') {
-    res.status(400).send("contentが文字列ではありません");
-    return;
-  }
-
-  // titleまたはcontentが空の場合はエラーを返す
-  if (title.trim() === '' || content.trim() === '') {
-    res.status(400).send("titleまたはcontentが空です");
-    return;
-  }
-
-  // トークン検証
-  const token = req.cookies.bulletin_token;
-  if (token === undefined || token === null) {
-    res.status(400).send("トークンがありません");
-    return;
-  }
-
-  if (!verifyJWT(token)) {
-    res.status(400).send("トークンが無効です");
-    return;
-  }
-
-  const payload = getPayloadFromJWT(token);
-  if (payload === null) {
-    res.status(400).send("トークンの解析に失敗しました");
-    return;
-  }
-
-  const postUpdate: post_update = {
-    post_id: Number(post_id),
-    title: title,
-    content: content
-  };
-
-  try {
-    await PostUpdateController(postUpdate, payload.user_id);
-    res.status(200).send("ポストの更新に成功しました");
-  } catch (error) {
-    if (error instanceof Error) {
-      res.status(400).send(error.message);
-    } else {
-      res.status(400).send("何らかのエラーが発生: " + error);
-    }
-  }
-});
-
+//管理者のみ削除可能
 router.delete("/", async (req, res) => {
-  const { post_id } = req.body;
-  if (post_id === undefined) {
-    res.status(400).send("post_idが入力されていません");
+  const { post_id, user_id } = req.body;
+  if (post_id === undefined || user_id === undefined) {
+    res.status(400).send("post_idまたはuser_idが入力されていません");
     return;
   }
 
-  // ポストIDを数値に変換できない場合はエラーを返す
+  //ポストIDを数値に変換できない場合はエラーを返す
   if (isNaN(Number(post_id))) {
     res.status(400).send("post_idが数値ではありません");
     return;
   }
 
-  // トークン取得
+  
   const token = req.cookies.bulletin_token;
   if (token === undefined || token === null) {
     res.status(400).send("トークンがありません");
     return;
   }
 
-  // トークン検証
+  //トークンの検証
   if (!verifyJWT(token)) {
     res.status(400).send("トークンが無効です");
     return;
   }
 
-  // トークンから情報を取得
+  //トークンから情報を取得
   const payload = getPayloadFromJWT(token);
   if (payload === null) {
     res.status(400).send("トークンの解析に失敗しました");
     return;
   }
+  const payload_user_id = payload.user_id;
 
-  const requesterUserId: string = payload.user_id;
-  const isAdmin: boolean = Number(payload.category_id) === 5;
+  //一応ここでエラー起きるようにしてるけど、フロント側で自分の投稿じゃないものを消せないようにしてるから起きないと思う
+  if (Number(payload_user_id) != Number(user_id) || Number(payload.category_id) !== 5) {
+    res.status(400).send("権限がありません");
+    return;
+  }
 
   try {
-    await PostDeleteController(Number(post_id), requesterUserId, isAdmin);
+    await PostDeleteController(Number(post_id));
     res.status(200).send("投稿を削除しました");
   } catch (error) {
     if (error instanceof Error) {
@@ -217,7 +152,9 @@ router.delete("/", async (req, res) => {
       res.status(400).send("何らかのエラーが発生: " + error);
     }
   }
-});
+
+  
+})
 
 //ポストIDからコメントを取得
 router.get("/:post_id/comments", async (req, res) => {
@@ -257,7 +194,7 @@ router.get("/:post_id/comments", async (req, res) => {
     const post_info = await PostGetController(Number(post_id));
 
     //payload.category_idが5（管理者）でない場合、かつ、ポストのカテゴリIDとpayload.category_idが一致しない場合かつ、post_info.category_idが1（全体）でない場合はエラーを返す
-    if (Number(payload.category_id) !== 5 && Number(post_info.category_id) !== Number(payload.category_id) && post_info.category_id !== 1) {
+    if (Number(payload.category_id) !== 5 && post_info.category_id != Number(payload.category_id) && post_info.category_id != 1) {
       res.status(400).send("権限がありません");
       return;
     }
@@ -268,7 +205,7 @@ router.get("/:post_id/comments", async (req, res) => {
 
     //ポストのIDからコメントを取得
     const comments = await CommentGetByPostIdController(req);
-
+    console.log(comments);
     //
     comments.post_content = post_info.content;
     comments.post_title = post_info.title;

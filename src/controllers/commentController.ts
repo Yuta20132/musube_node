@@ -1,4 +1,4 @@
-import { createAdminCommentQuery, createCommentQuery, createGetCommentByIdQuery, createUpdateCommentQuery } from "../components/createQuery";
+import { createAdminCommentQuery, createCommentQuery } from "../components/createQuery";
 import pool from "../db/client";
 
 export const CommentCreateController = async (post_id: number, user_id: string, content: string, category_id: number) => {
@@ -44,105 +44,6 @@ export const CommentCreateController = async (post_id: number, user_id: string, 
       throw new Error("エラーが発生");
     } else {
       console.log("予期しないエラー: ", error)
-      throw new Error("何らかのエラーが発生");
-    }
-  } finally {
-    if (client) {
-      client.release();
-    }
-    console.log("disconnected\n");
-  }
-}
-
-export const CommentDeleteController = async (
-  comment_id: number,
-  requester_user_id: string,
-  requester_is_admin: boolean
-) => {
-  let client;
-
-  try {
-    client = await pool.connect();
-    // 対象コメントの存在確認と所有者取得
-    const getCommentQuery = createGetCommentByIdQuery();
-    const commentResult = await client.query(getCommentQuery, [comment_id]);
-
-    if (commentResult.rowCount === 0) {
-      throw new Error("指定されたコメントが存在しません");
-    }
-
-    const ownerUserId: string = String(commentResult.rows[0].user_id);
-
-    // 権限チェック（管理者 or 投稿者本人）
-    if (!requester_is_admin && ownerUserId !== requester_user_id) {
-      throw new Error("このコメントを削除する権限がありません");
-    }
-
-    // 削除実行
-    let result;
-    if (requester_is_admin) {
-      const queryAdmin = "DELETE FROM comments WHERE id = $1";
-      result = await client.query(queryAdmin, [comment_id]);
-    } else {
-      const queryOwner = "DELETE FROM comments WHERE id = $1 AND user_id = $2";
-      result = await client.query(queryOwner, [comment_id, requester_user_id]);
-    }
-
-    if (result.rowCount === 0) {
-      throw new Error("コメントの削除に失敗しました");
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      console.log(error.message);
-      throw new Error(error.message);
-    } else {
-      console.log("予期しないエラー", error);
-      throw new Error("何らかのエラーが発生");
-    }
-  } finally {
-    if (client) {
-      client.release();
-    }
-    console.log("disconnected\n");
-  }
-}
-
-export const CommentUpdateController = async (comment_id: number, content: string, user_id: string) => {
-  let client;
-
-  try {
-    client = await pool.connect();
-    
-    // まずコメントが存在し、ユーザが投稿者であることを確認
-    const getCommentQuery = createGetCommentByIdQuery();
-    const commentResult = await client.query(getCommentQuery, [comment_id]);
-
-    if (commentResult.rowCount === 0) {
-      throw new Error("指定されたコメントが存在しません");
-    }
-
-    const comment = commentResult.rows[0];
-    if (comment.user_id !== user_id) {
-      throw new Error("このコメントを編集する権限がありません");
-    }
-
-    // コメントを更新
-    const updateQuery = createUpdateCommentQuery();
-    const updateResult = await client.query(updateQuery, [content, comment_id, user_id]);
-
-    if (updateResult.rowCount === 0) {
-      throw new Error("コメントの更新に失敗しました");
-    }
-
-    console.log("コメントの更新に成功");
-    return updateResult.rows[0];
-
-  } catch (error) {
-    if (error instanceof Error) {
-      console.log("コメント更新エラー", error.message);
-      throw new Error(error.message);
-    } else {
-      console.log("予期しないエラー: ", error);
       throw new Error("何らかのエラーが発生");
     }
   } finally {

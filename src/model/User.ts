@@ -6,7 +6,8 @@ export class user_registration {
     category_id: number,
     institution: string,
     email: string,
-    password: string) {
+    password: string,
+    description: string = "") {
     this.user_name = user_name;
     this.first_name = first_name;
     this.last_name = last_name;
@@ -14,6 +15,7 @@ export class user_registration {
     this.institution = institution;
     this.email = email;
     this.password = password;
+    this.description = description;
     }
   user_name: string;
   first_name: string;
@@ -22,6 +24,7 @@ export class user_registration {
   institution: string;
   email: string;
   password: string;
+  description: string;
 }
 
 export class user_login {
@@ -44,8 +47,9 @@ export class User extends user_registration {
     is_active: boolean, 
     is_admin: boolean,
     password: string,
-    created_at: Date) {
-    super(name, first_name, last_name, category_id,institution, email, password);
+    created_at: Date,
+    description: string = "") {
+    super(name, first_name, last_name, category_id, institution, email, password, description);
     this.id = id;
     this.is_active = is_active;
     this.is_admin = is_admin;
@@ -66,5 +70,4 @@ export class mailInfo {
   id: string;
   email: string;
 }
-
 

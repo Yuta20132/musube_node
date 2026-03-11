@@ -1,6 +1,6 @@
-import { createGetCommentsByPostIdQuery, createGetPostInfoQuery, createGetPostByIdQuery, createUpdatePostQuery, createPostQuery } from "../components/createQuery";
+import { createGetCommentsByPostIdQuery, createGetPostInfoQuery, createPostQuery } from "../components/createQuery";
 import pool from "../db/client";
-import { getCommentsRequest, getCommentsResponse, post_info, post_registration, post_update } from "../model/Post";
+import { getCommentsRequest, getCommentsResponse, post_info, post_registration } from "../model/Post";
 export const PostCreateController = async (post: post_registration, category_id: Number) => {
 
   let client;
@@ -65,43 +65,19 @@ export const PostCreateController = async (post: post_registration, category_id:
   }
 };
 
-export const PostDeleteController = async (
-  post_id: number,
-  requester_user_id: string,
-  requester_is_admin: boolean
-) => {
+export const PostDeleteController = async (post_id: number) => {
   let client;
 
   try {
     client = await pool.connect();
-    // まず対象ポストの存在確認と所有者取得
-    const getPostQuery = createGetPostByIdQuery();
-    const postResult = await client.query(getPostQuery, [post_id]);
+    const query = "DELETE FROM posts WHERE id = $1";
+    const result = await client.query(query, [post_id]);
 
-    if (postResult.rowCount === 0) {
-      throw new Error("指定されたポストが存在しません");
-    }
-
-    const ownerUserId: string = String(postResult.rows[0].user_id);
-
-    // 権限チェック（管理者 or 投稿者本人）
-    if (!requester_is_admin && ownerUserId !== requester_user_id) {
-      throw new Error("このポストを削除する権限がありません");
-    }
-
-    // 削除実行（本人の場合は所有者であることをWHEREでも担保）
-    let result;
-    if (requester_is_admin) {
-      const queryAdmin = "DELETE FROM posts WHERE id = $1";
-      result = await client.query(queryAdmin, [post_id]);
-    } else {
-      const queryOwner = "DELETE FROM posts WHERE id = $1 AND user_id = $2";
-      result = await client.query(queryOwner, [post_id, requester_user_id]);
-    }
-
+    console.log(result.rowCount);
     if (result.rowCount === 0) {
-      // 理論上到達しないが、同時更新などの場合に備える
-      throw new Error("ポストの削除に失敗しました");
+      throw new Error("指定された投稿が存在しません");
+    } else {
+      console.log(result.rowCount);
     }
   } catch (error) {
     if (error instanceof Error) {
@@ -170,9 +146,9 @@ export const CommentGetByPostIdController = async (p_req: getCommentsRequest): P
       throw new Error("データベースエラー");
     }
 
-    if (result.rowCount === 0) {
-      throw new Error("指定された投稿にコメントはありません");
-    }
+    // if (result.rowCount === 0) {
+    //   throw new Error("指定された投稿にコメントはありません");
+    // }
 
     const response: getCommentsResponse = {
       post_id: p_req.post_id,
@@ -190,52 +166,6 @@ export const CommentGetByPostIdController = async (p_req: getCommentsRequest): P
       throw new Error(error.message);
     } else {
       throw new Error("なんらかのエラーが発生しました" + error);
-    }
-  } finally {
-    if (client) {
-      client.release();
-    }
-    console.log("disconnected\n");
-  }
-}
-
-export const PostUpdateController = async (post: post_update, user_id: string) => {
-  let client;
-
-  try {
-    client = await pool.connect();
-    
-    // まずポストが存在し、ユーザが投稿者であることを確認
-    const getPostQuery = createGetPostByIdQuery();
-    const postResult = await client.query(getPostQuery, [post.post_id]);
-
-    if (postResult.rowCount === 0) {
-      throw new Error("指定されたポストが存在しません");
-    }
-
-    const existingPost = postResult.rows[0];
-    if (existingPost.user_id !== user_id) {
-      throw new Error("このポストを編集する権限がありません");
-    }
-
-    // ポストを更新
-    const updateQuery = createUpdatePostQuery();
-    const updateResult = await client.query(updateQuery, [post.title, post.content, post.post_id, user_id]);
-
-    if (updateResult.rowCount === 0) {
-      throw new Error("ポストの更新に失敗しました");
-    }
-
-    console.log("ポストの更新に成功");
-    return updateResult.rows[0];
-
-  } catch (error) {
-    if (error instanceof Error) {
-      console.log("ポスト更新エラー", error.message);
-      throw new Error(error.message);
-    } else {
-      console.log("予期しないエラー: ", error);
-      throw new Error("何らかのエラーが発生");
     }
   } finally {
     if (client) {
