@@ -1,6 +1,7 @@
 import express from 'express';
 import { getPayloadFromJWT, verifyJWT } from '../components/jwt';
 import { CommentCreateController } from '../controllers/commentController';
+import { PostGetController } from '../controllers/postController';
 
 const router = express.Router();
 
@@ -38,13 +39,6 @@ router.post("/", async (req, res) => {
     return;
   }
 
-  //payloadにあるユーザのcategory_idと受け取った投稿のcategory_idが一致しないまたはpayloadのcategory_idが5（管理者）でない場合はエラーを返す
-  if (Number(payload.category_id) !== Number(category_id) && Number(payload.category_id) !== 5) {
-    res.status(400).send("権限がありません");
-    return;
-  }
-  
-
   //thread_idを数値に変換できるか確認
   if (isNaN(Number(post_id))) {
     res.status(400).send("post_idが数値ではありません");
@@ -58,9 +52,27 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    const post_info = await PostGetController(Number(post_id));
+    const post_category_id = Number(post_info.category_id);
+
+    //post_idとcategory_idの不整合を防ぐ
+    if (post_category_id !== Number(category_id)) {
+      res.status(400).send("post_idとcategory_idの組み合わせが不正です");
+      return;
+    }
+
+    //payload.category_idが5（管理者）でない、かつ投稿のcategory_idとpayload.category_idが一致せず、かつ投稿がcategory_id=1（全体）でない場合はエラーを返す
+    if (
+      Number(payload.category_id) !== 5 &&
+      Number(payload.category_id) !== post_category_id &&
+      post_category_id !== 1
+    ) {
+      res.status(400).send("権限がありません");
+      return;
+    }
+
     //コメントの作成
-    //category_idは投稿のカテゴリID
-    await CommentCreateController(Number(post_id), payload.user_id, content, Number(category_id));
+    await CommentCreateController(Number(post_id), payload.user_id, content, Number(payload.category_id));
     res.status(200).send("コメントの作成に成功しました");
   } catch (err) {
     console.log(err);
