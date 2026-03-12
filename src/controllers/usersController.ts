@@ -224,6 +224,8 @@ export const ProfileEditController = async (
 
       //日本時間に変換
       const expires_at_jst = convertUtcToJst(expiresAt);
+      const last_sent_at_jst = convertUtcToJst(new Date());
+      const last_sent_at_jst_date = new Date(last_sent_at_jst);
       //クエリの作成
       //emailとcategory_idの変更はメール認証後なので、いったんpending_user_changesに保存しておく
       //まずはcategory_idの変更がある場合
@@ -232,12 +234,12 @@ export const ProfileEditController = async (
       // トークンの生成
       const token = crypto.randomBytes(32).toString("hex");
       query_pending_category = `
-      INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
-      SELECT $1, 'category_id', $2, $3, $4, $5
+      INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at, last_sent_at)
+      SELECT $1, 'category_id', $2, $3, $4, $5, $6
       WHERE NOT EXISTS (
           SELECT 1
           FROM pending_user_changes
-          WHERE user_id = $6 AND field_name = 'category_id'
+          WHERE user_id = $7 AND field_name = 'category_id'
       );
       `;
 
@@ -248,12 +250,29 @@ export const ProfileEditController = async (
         token,
         false,
         expires_at_jst,
+        last_sent_at_jst_date,
         profile.user_id,
       ]);
 
-      //pending_user_changesに挿入できなかった場合
+      // 保留中レコードがある場合は、内容を更新して再送可能にする
       if (result.rowCount === 0) {
-        throw new Error("現在カテゴリの変更が保留されています");
+        const query_pending_category_update = `
+        UPDATE pending_user_changes
+        SET new_value = $1, token = $2, is_verified = false, expires_at = $3, last_sent_at = $4
+        WHERE user_id = $5 AND field_name = 'category_id'
+        `;
+
+        const result_update = await client.query(query_pending_category_update, [
+          profile.category_id,
+          token,
+          expires_at_jst,
+          last_sent_at_jst_date,
+          profile.user_id,
+        ]);
+
+        if (result_update.rowCount === 0) {
+          throw new Error("カテゴリ変更の再送準備に失敗しました");
+        }
       }
 
       console.log("カテゴリID変更のメール送信");
@@ -278,6 +297,8 @@ export const ProfileEditController = async (
       expiresAt.setDate(expiresAt.getDate() + 1);
       //日本時間に変換
       const expires_at_jst = convertUtcToJst(expiresAt);
+      const last_sent_at_jst = convertUtcToJst(new Date());
+      const last_sent_at_jst_date = new Date(last_sent_at_jst);
       //クエリの作成
       //emailとcategory_idの変更はメール認証後なので、いったんpending_user_changesに保存しておく
       //まずはcategory_idの変更がある場合
@@ -286,12 +307,12 @@ export const ProfileEditController = async (
       // トークンの生成
       const token = crypto.randomBytes(32).toString("hex");
       query_pending_email = `
-      INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at)
-      SELECT $1, 'email', $2, $3, $4, $5
+      INSERT INTO pending_user_changes (user_id, field_name, new_value, token, is_verified, expires_at, last_sent_at)
+      SELECT $1, 'email', $2, $3, $4, $5, $6
       WHERE NOT EXISTS (
           SELECT 1
           FROM pending_user_changes
-          WHERE user_id = $6 AND field_name = 'email'
+          WHERE user_id = $7 AND field_name = 'email'
       );
       `;
 
@@ -302,12 +323,29 @@ export const ProfileEditController = async (
         token,
         false,
         expires_at_jst,
+        last_sent_at_jst_date,
         profile.user_id,
       ]);
 
-      //pending_user_changesに挿入できなかった場合
+      // 保留中レコードがある場合は、内容を更新して再送可能にする
       if (result.rowCount === 0) {
-        throw new Error("現在メールアドレスの変更が保留されています");
+        const query_pending_email_update = `
+        UPDATE pending_user_changes
+        SET new_value = $1, token = $2, is_verified = false, expires_at = $3, last_sent_at = $4
+        WHERE user_id = $5 AND field_name = 'email'
+        `;
+
+        const result_update = await client.query(query_pending_email_update, [
+          profile.email,
+          token,
+          expires_at_jst,
+          last_sent_at_jst_date,
+          profile.user_id,
+        ]);
+
+        if (result_update.rowCount === 0) {
+          throw new Error("メールアドレス変更の再送準備に失敗しました");
+        }
       }
 
       console.log("メールアドレス変更のメール送信");
@@ -389,7 +427,7 @@ export const UserReSendMailController = async (
 export const ProfileReSendMailController = async (
   id: string,
   field_name: string
-): Promise<string> => {
+): Promise<{ token: string; newValue: string }> => {
   let client;
   try {
     //データベースに接続
@@ -417,10 +455,13 @@ export const ProfileReSendMailController = async (
       //now_jstをDate型に変換
       const now_jst_date = new Date(now_jst);
 
-      const diff = now_jst_date.getTime() - last_sent_at.getTime();
-      console.log(diff);
-      if (diff < 300000) {
-        throw new Error("再送信から5分以内は再送信できません");
+      //過去データでlast_sent_atがnullの場合は制限をスキップ
+      if (last_sent_at) {
+        const diff = now_jst_date.getTime() - new Date(last_sent_at).getTime();
+        console.log(diff);
+        if (diff < 300000) {
+          throw new Error("再送信から5分以内は再送信できません");
+        }
       }
     }
 
@@ -455,11 +496,21 @@ export const ProfileReSendMailController = async (
       throw new Error("情報の更新に失敗しました");
     }
 
-    //result.rows[0].tokenをstring型に変換
+    await client.query("COMMIT");
+
+    //result.rows[0].token/new_valueを文字列に変換
     const token = String(result.rows[0].token);
-    return token;
+    const newValue =
+      result.rows[0].new_value !== undefined &&
+      result.rows[0].new_value !== null
+        ? String(result.rows[0].new_value)
+        : "";
+    return { token, newValue };
   } catch (error) {
     console.log(error);
+    if (client) {
+      await client.query("ROLLBACK");
+    }
     if (error instanceof Error) {
       throw new Error(error.message);
     } else {

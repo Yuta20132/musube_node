@@ -490,10 +490,13 @@ router.get("/email-resend", async(req, res) => {
   console.log(`メールアドレス変更の確認メール再送信:${payload.user_id}`);
 
   try {
-    const token = await ProfileReSendMailController(payload.user_id, 'email');
+    const resendInfo = await ProfileReSendMailController(payload.user_id, "email");
+    if (!resendInfo.newValue) {
+      throw new Error("再送先メールアドレスが見つかりません");
+    }
 
     //メール送信
-    await sendMail(payload.email, token, 3);
+    await sendMail(resendInfo.newValue, resendInfo.token, 3);
 
     //ステータスコード200とメッセージを返す
     res.status(200).send("メールを再送信しました");
@@ -531,10 +534,13 @@ router.get("/category-resend", async(req, res) => {
   console.log(`メールアドレス変更の確認メール再送信:${payload.user_id}`);
 
   try {
-    const token = await ProfileReSendMailController(payload.user_id, 'category_id');
+    const resendInfo = await ProfileReSendMailController(
+      payload.user_id,
+      "category_id"
+    );
 
     //メール送信
-    await sendMail(payload.email, token, 2);
+    await sendMail(payload.email, resendInfo.token, 2);
 
     //ステータスコード200とメッセージを返す
     res.status(200).send("メールを再送信しました");
